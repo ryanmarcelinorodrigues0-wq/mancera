@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Tarefas - Mancera{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <div class="content-section">
+            <div class="section-header">
+                <h1>Minhas Tarefas</h1>
+                <p class="section-subtitle">Visualize e entregue suas tarefas</p>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="tabs-container">
+                <button class="tab-btn active" data-tab="pending">
+                    <i class="fas fa-clock"></i> Pendentes
+                    {% if pending_count > 0 %}
+                    <span class="tab-badge">{{ pending_count }}</span>
+                    {% endif %}
+                </button>
+                <button class="tab-btn" data-tab="submitted">
+                    <i class="fas fa-paper-plane"></i> Enviadas
+                    {% if submitted_count > 0 %}
+                    <span class="tab-badge blue">{{ submitted_count }}</span>
+                    {% endif %}
+                </button>
+                <button class="tab-btn" data-tab="graded">
+                    <i class="fas fa-check-circle"></i> Corrigidas
+                    {% if graded_count > 0 %}
+                    <span class="tab-badge green">{{ graded_count }}</span>
+                    {% endif %}
+                </button>
+                <button class="tab-btn" data-tab="overdue">
+                    <i class="fas fa-exclamation-circle"></i> Atrasadas
+                    {% if overdue_count > 0 %}
+                    <span class="tab-badge red">{{ overdue_count }}</span>
+                    {% endif %}
+                </button>
+            </div>
+            
+            <!-- Tarefas Pendentes -->
+            <div class="tab-content active" id="pending-tasks">
+                <h2 class="content-title"><i class="fas fa-clock"></i> Tarefas Pendentes</h2>
+                {% if pending_tasks %}
+                <div class="tasks-list">
+                    {% for task in pending_tasks %}
+                    <div class="task-card {% if task.is_past_due() %}overdue{% endif %}">
+                        <div class="task-indicator pending"></div>
+                        <div class="task-content">
+                            <h3>{{ task.title }}</h3>
+                            <p class="task-description">{{ task.description[:150] + '...' if task.description and task.description|length > 150 else task.description or 'Sem descrição' }}</p>
+                            <div class="task-meta">
+                                <span class="deadline {% if task.is_past_due() %}overdue{% endif %}">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Prazo: {{ task.due_date.strftime('%d/%m/%Y às %H:%M') }}
+                                </span>
+                                {% if task.max_grade %}
+                                <span class="points">
+                                    <i class="fas fa-star"></i>
+                                    Valor: {{ task.max_grade }} pontos
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            <a href="{{ url_for('student_task_detail', task_id=task.id) }}" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> Entregar
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-small">
+                    <i class="fas fa-check-circle"></i>
+                    <p>Nenhuma tarefa pendente!</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Tarefas Enviadas -->
+            <div class="tab-content" id="submitted-tasks">
+                <h2 class="content-title"><i class="fas fa-paper-plane"></i> Aguardando Correção</h2>
+                {% if submitted_tasks %}
+                <div class="tasks-list">
+                    {% for submission in submitted_tasks %}
+                    <div class="task-card submitted">
+                        <div class="task-indicator submitted"></div>
+                        <div class="task-content">
+                            <h3>{{ submission.task.title }}</h3>
+                            <p class="task-description">{{ submission.task.description[:150] + '...' if submission.task.description and submission.task.description|length > 150 else submission.task.description or 'Sem descrição' }}</p>
+                            <div class="task-meta">
+                                <span>
+                                    <i class="fas fa-clock"></i>
+                                    Enviado em: {{ submission.submitted_at.strftime('%d/%m/%Y às %H:%M') }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            <a href="{{ url_for('student_submission_detail', submission_id=submission.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-eye"></i> Ver Envio
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-small">
+                    <i class="fas fa-inbox"></i>
+                    <p>Nenhuma tarefa aguardando correção.</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Tarefas Corrigidas -->
+            <div class="tab-content" id="graded-tasks">
+                <h2 class="content-title"><i class="fas fa-check-circle"></i> Tarefas Corrigidas</h2>
+                {% if graded_tasks %}
+                <div class="tasks-list">
+                    {% for submission in graded_tasks %}
+                    <div class="task-card graded">
+                        <div class="task-indicator graded"></div>
+                        <div class="task-content">
+                            <h3>{{ submission.task.title }}</h3>
+                            <div class="task-meta">
+                                <span>
+                                    <i class="fas fa-calendar-check"></i>
+                                    Corrigido em: {{ submission.graded_at.strftime('%d/%m/%Y') if submission.graded_at else 'N/A' }}
+                                </span>
+                            </div>
+                            {% if submission.feedback %}
+                            <div class="feedback-preview">
+                                <strong>Feedback:</strong> {{ submission.feedback[:100] + '...' if submission.feedback|length > 100 else submission.feedback }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="task-grade">
+                            <div class="grade-display {% if submission.grade >= 7 %}good{% elif submission.grade >= 5 %}average{% else %}low{% endif %}">
+                                <span class="grade-value">{{ "%.1f"|format(submission.grade) }}</span>
+                                {% if submission.task.max_grade %}
+                                <span class="grade-max">/ {{ submission.task.max_grade }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            <a href="{{ url_for('student_submission_detail', submission_id=submission.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-eye"></i> Detalhes
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-small">
+                    <i class="fas fa-graduation-cap"></i>
+                    <p>Nenhuma tarefa corrigida ainda.</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Tarefas Atrasadas -->
+            <div class="tab-content" id="overdue-tasks">
+                <h2 class="content-title"><i class="fas fa-exclamation-circle"></i> Tarefas Atrasadas</h2>
+                {% if overdue_tasks %}
+                <div class="tasks-list">
+                    {% for task in overdue_tasks %}
+                    <div class="task-card overdue">
+                        <div class="task-indicator overdue"></div>
+                        <div class="task-content">
+                            <h3>{{ task.title }}</h3>
+                            <p class="task-description">{{ task.description[:150] + '...' if task.description and task.description|length > 150 else task.description or 'Sem descrição' }}</p>
+                            <div class="task-meta">
+                                <span class="deadline overdue">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Prazo expirado: {{ task.due_date.strftime('%d/%m/%Y às %H:%M') }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            {% if task.allow_late_submission %}
+                            <a href="{{ url_for('student_task_detail', task_id=task.id) }}" class="btn btn-warning">
+                                <i class="fas fa-paper-plane"></i> Entregar (Atrasado)
+                            </a>
+                            {% else %}
+                            <span class="btn btn-disabled">
+                                <i class="fas fa-ban"></i> Prazo Encerrado
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state-small">
+                    <i class="fas fa-smile"></i>
+                    <p>Nenhuma tarefa atrasada. Continue assim!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+/* ===== LAYOUT ===== */
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f8f9fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 280px;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.section-header {
+    margin-bottom: 24px;
+}
+
+.section-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+
+.section-subtitle {
+    color: #6c757d;
+    margin: 8px 0 0 0;
+}
+
+/* ===== TABS ===== */
+.tabs-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 10px;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border: 1px solid #e9ecef;
+    background: white;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.tab-btn:hover {
+    border-color: #007BFF;
+    color: #007BFF;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
+}
+
+.tab-badge {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.tab-btn.active .tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.tab-badge.blue { background: #e3f2fd; color: #1976d2; }
+.tab-badge.green { background: #e8f5e9; color: #388e3c; }
+.tab-badge.red { background: #ffebee; color: #d32f2f; }
+
+/* ===== TAB CONTENT ===== */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.content-title {
+    font-size: 1.1rem;
+    color: #212529;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+.content-title i {
+    color: #007BFF;
+}
+
+/* ===== TASKS LIST ===== */
+.tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.task-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    background: #f8f9fa;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.task-card:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.task-card.overdue {
+    border-left: 4px solid #dc3545;
+    background: #fff5f5;
+}
+
+.task-card.submitted {
+    border-left: 4px solid #007BFF;
+}
+
+.task-card.graded {
+    border-left: 4px solid #28a745;
+}
+
+.task-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+
+.task-indicator.pending { background: #ffc107; }
+.task-indicator.submitted { background: #007BFF; }
+.task-indicator.graded { background: #28a745; }
+.task-indicator.overdue { background: #dc3545; }
+
+.task-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-content h3 {
+    font-size: 1.1rem;
+    color: #212529;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.task-description {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin: 0 0 14px 0;
+    line-height: 1.5;
+}
+
+.task-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.task-meta span {
+    font-size: 0.85rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.task-meta span i {
+    color: #007BFF;
+}
+
+.task-meta .deadline.overdue {
+    color: #dc3545;
+}
+
+.task-meta .deadline.overdue i {
+    color: #dc3545;
+}
+
+.feedback-preview {
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #495057;
+    border: 1px solid #e9ecef;
+}
+
+/* ===== GRADE DISPLAY ===== */
+.task-grade {
+    padding: 0 20px;
+}
+
+.grade-display {
+    text-align: center;
+    padding: 14px 20px;
+    border-radius: 10px;
+}
+
+.grade-display.good { background: #d4edda; }
+.grade-display.average { background: #fff3cd; }
+.grade-display.low { background: #f8d7da; }
+
+.grade-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.grade-display.good .grade-value { color: #28a745; }
+.grade-display.average .grade-value { color: #856404; }
+.grade-display.low .grade-value { color: #dc3545; }
+
+.grade-max {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+/* ===== BUTTONS ===== */
+.task-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-secondary {
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #e9ecef;
+}
+
+.btn-secondary:hover {
+    background: #e9ecef;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    color: #212529;
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+.btn-disabled {
+    background: #e9ecef;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state-small {
+    text-align: center;
+    padding: 50px 20px;
+    color: #6c757d;
+}
+
+.empty-state-small i {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.4;
+    color: #007BFF;
+}
+
+.empty-state-small p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+        padding-top: 70px;
+    }
+    
+    .content-section {
+        padding: 20px;
+    }
+    
+    .tabs-container {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding: 8px;
+    }
+    
+    .tab-btn {
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+    
+    .task-card {
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+    }
+    
+    .task-indicator {
+        display: none;
+    }
+    
+    .task-grade {
+        padding: 0;
+        width: 100%;
+    }
+    
+    .grade-display {
+        display: inline-block;
+    }
+    
+    .task-actions {
+        width: 100%;
+        flex-direction: row;
+    }
+    
+    .task-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const contents = {
+        'pending': document.getElementById('pending-tasks'),
+        'submitted': document.getElementById('submitted-tasks'),
+        'graded': document.getElementById('graded-tasks'),
+        'overdue': document.getElementById('overdue-tasks')
+    };
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Remove active from all
+            tabBtns.forEach(b => b.classList.remove('active'));
+            Object.values(contents).forEach(c => c && c.classList.remove('active'));
+            
+            // Add active to clicked
+            this.classList.add('active');
+            const tab = this.dataset.tab;
+            if (contents[tab]) {
+                contents[tab].classList.add('active');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

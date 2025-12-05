@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil - Área do Aluno{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <header class="page-header">
+            <div class="header-content">
+                <h1><i class="fas fa-user-cog"></i> Meu Perfil</h1>
+                <p>Gerencie suas informações pessoais</p>
+            </div>
+        </header>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="profile-grid">
+            <!-- Card do Perfil -->
+            <section class="profile-card">
+                <div class="profile-header">
+                    <div class="avatar">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="profile-info">
+                        <h2>{{ current_user.name }}</h2>
+                        <p>{{ current_user.email }}</p>
+                        <span class="role-badge">Aluno</span>
+                    </div>
+                </div>
+                
+                <div class="profile-stats">
+                    <div class="stat">
+                        <span class="stat-value">{{ stats.submitted_tasks }}</span>
+                        <span class="stat-label">Tarefas Enviadas</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">{{ "%.1f"|format(stats.average_grade) if stats.average_grade else "N/A" }}</span>
+                        <span class="stat-label">Média Geral</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">{{ stats.days_active }}</span>
+                        <span class="stat-label">Dias como Aluno</span>
+                    </div>
+                </div>
+                
+                <div class="subscription-info">
+                    <h3><i class="fas fa-id-card"></i> Status da Conta</h3>
+                    <div class="info-row">
+                        <span class="label">Membro desde:</span>
+                        <span class="value">{{ current_user.created_at.strftime('%d/%m/%Y') if current_user.created_at else 'N/A' }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Status:</span>
+                        <span class="value status {% if current_user.is_expired() %}expired{% else %}active{% endif %}">
+                            {% if current_user.is_expired() %}
+                            <i class="fas fa-times-circle"></i> Expirada
+                            {% else %}
+                            <i class="fas fa-check-circle"></i> Ativa
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if current_user.subscription_end %}
+                    <div class="info-row">
+                        <span class="label">{% if current_user.is_expired() %}Expirou em:{% else %}Válida até:{% endif %}</span>
+                        <span class="value">{{ current_user.subscription_end.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+            
+            <!-- Formulário de Edição -->
+            <section class="edit-form-card">
+                <h2><i class="fas fa-edit"></i> Editar Informações</h2>
+                
+                <form action="{{ url_for('student_update_profile') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="form-group">
+                        <label for="name">
+                            <i class="fas fa-user"></i> Nome Completo
+                        </label>
+                        <input type="text" id="name" name="name" value="{{ current_user.name }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">
+                            <i class="fas fa-envelope"></i> E-mail
+                        </label>
+                        <input type="email" id="email" name="email" value="{{ current_user.email }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">
+                            <i class="fas fa-phone"></i> Telefone (opcional)
+                        </label>
+                        <input type="tel" id="phone" name="phone" value="{{ current_user.phone or '' }}" placeholder="(00) 00000-0000">
+                    </div>
+                    
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </form>
+            </section>
+            
+            <!-- Alterar Senha -->
+            <section class="password-card">
+                <h2><i class="fas fa-lock"></i> Alterar Senha</h2>
+                
+                <form action="{{ url_for('student_change_password') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="form-group">
+                        <label for="current_password">
+                            <i class="fas fa-key"></i> Senha Atual
+                        </label>
+                        <input type="password" id="current_password" name="current_password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new_password">
+                            <i class="fas fa-lock"></i> Nova Senha
+                        </label>
+                        <input type="password" id="new_password" name="new_password" required minlength="6">
+                        <small>Mínimo de 6 caracteres</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm_password">
+                            <i class="fas fa-lock"></i> Confirmar Nova Senha
+                        </label>
+                        <input type="password" id="confirm_password" name="confirm_password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn-save secondary">
+                        <i class="fas fa-key"></i> Alterar Senha
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+</div>
+
+<style>
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f5f7fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    padding: 30px;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-content {
+    margin-left: 70px;
+}
+
+.page-header {
+    margin-bottom: 30px;
+}
+
+.header-content h1 {
+    font-size: 1.8rem;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.header-content h1 i {
+    color: #4facfe;
+}
+
+.header-content p {
+    color: #666;
+    margin: 5px 0 0 0;
+}
+
+/* Alert */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+}
+
+.alert-success {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.alert-error, .alert-danger {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+/* Profile Grid */
+.profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+/* Profile Card */
+.profile-card {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    background: #fff;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.profile-header {
+    text-align: center;
+    padding-bottom: 25px;
+    border-bottom: 1px solid #e0e6ed;
+    margin-bottom: 25px;
+}
+
+.avatar {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.avatar i {
+    font-size: 2.5rem;
+    color: #fff;
+}
+
+.profile-info h2 {
+    margin: 0 0 5px 0;
+    font-size: 1.4rem;
+    color: #1a1a2e;
+}
+
+.profile-info p {
+    margin: 0 0 15px 0;
+    color: #666;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* Profile Stats */
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding-bottom: 25px;
+    border-bottom: 1px solid #e0e6ed;
+    margin-bottom: 25px;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #999;
+}
+
+/* Subscription Info */
+.subscription-info h3 {
+    font-size: 1rem;
+    color: #1a1a2e;
+    margin: 0 0 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscription-info h3 i {
+    color: #4facfe;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row .label {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.info-row .value {
+    font-weight: 500;
+    color: #1a1a2e;
+}
+
+.info-row .value.status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.info-row .value.active {
+    color: #27ae60;
+}
+
+.info-row .value.expired {
+    color: #e74c3c;
+}
+
+/* Edit Form Card & Password Card */
+.edit-form-card, .password-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.edit-form-card h2, .password-card h2 {
+    font-size: 1.2rem;
+    color: #1a1a2e;
+    margin: 0 0 25px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.edit-form-card h2 i, .password-card h2 i {
+    color: #4facfe;
+}
+
+/* Form Group */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #1a1a2e;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.form-group label i {
+    color: #4facfe;
+    width: 16px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e0e6ed;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #4facfe;
+    box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #999;
+    font-size: 0.8rem;
+}
+
+/* Buttons */
+.btn-save {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 25px;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.btn-save:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 172, 254, 0.4);
+}
+
+.btn-save.secondary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.btn-save.secondary:hover {
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .profile-card {
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+    
+    .profile-stats {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

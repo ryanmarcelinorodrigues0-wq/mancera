@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container" data-testid="professor-dashboard">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="content-section">
+            <h1>Dashboard</h1>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total de Alunos</h3>
+                    <div class="stat-value">{{ stats.total_students }}</div>
+                    <p class="stat-description">Alunos cadastrados</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Videoaulas</h3>
+                    <div class="stat-value">{{ stats.total_videos }}</div>
+                    <p class="stat-description">Conteúdos disponíveis</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Tarefas Pendentes</h3>
+                    <div class="stat-value">{{ stats.pending_submissions }}</div>
+                    <p class="stat-description">Para corrigir</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Materiais</h3>
+                    <div class="stat-value">{{ stats.total_materials }}</div>
+                    <p class="stat-description">Recursos de apoio</p>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+/* ===== CONTEÚDO DO DASHBOARD ===== */
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.content-section h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 32px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.stat-card:nth-child(1)::before { background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%); }
+.stat-card:nth-child(2)::before { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+.stat-card:nth-child(3)::before { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); }
+.stat-card:nth-child(4)::before { background: linear-gradient(135deg, #6f42c1 0%, #59359a 100%); }
+
+.stat-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.stat-card:nth-child(1) .stat-value { color: #007BFF; }
+.stat-card:nth-child(2) .stat-value { color: #28a745; }
+.stat-card:nth-child(3) .stat-value { color: #ffc107; }
+.stat-card:nth-child(4) .stat-value { color: #6f42c1; }
+
+.stat-description {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .content-section { padding: 24px; }
+    .stats-grid { grid-template-columns: 1fr; gap: 16px; }
+    .stat-card { padding: 20px; }
+    .stat-value { font-size: 36px; }
+}
+
+@media (max-width: 480px) {
+    .content-section h1 { font-size: 24px; margin-bottom: 24px; }
+    .stat-value { font-size: 32px; }
+    .stat-card h3 { font-size: 14px; }
+}
+</style>
+{% endblock %}

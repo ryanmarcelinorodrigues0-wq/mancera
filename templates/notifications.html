@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}Notificações{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    {% if current_user.role == 'professor' %}
+        {% include 'professor/_sidebar.html' %}
+    {% else %}
+        {% include 'student/_sidebar.html' %}
+    {% endif %}
+    
+    <main class="main-content">
+        <header class="page-header">
+            <div class="header-content">
+                <h1><i class="fas fa-bell"></i> Notificações</h1>
+                <p>Suas notificações e alertas</p>
+            </div>
+            {% if notifications %}
+            <div class="header-actions">
+                <form action="{{ url_for('mark_all_notifications_read') }}" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-mark-all">
+                        <i class="fas fa-check-double"></i> Marcar todas como lidas
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </header>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <section class="notifications-section">
+            {% if notifications %}
+            <div class="notifications-list">
+                {% for notification in notifications %}
+                <div class="notification-card {% if not notification.is_read %}unread{% endif %}">
+                    <div class="notification-icon {{ notification.type or 'info' }}">
+                        {% if notification.type == 'task' %}
+                        <i class="fas fa-tasks"></i>
+                        {% elif notification.type == 'grade' %}
+                        <i class="fas fa-star"></i>
+                        {% elif notification.type == 'message' %}
+                        <i class="fas fa-comment"></i>
+                        {% elif notification.type == 'video' %}
+                        <i class="fas fa-video"></i>
+                        {% elif notification.type == 'material' %}
+                        <i class="fas fa-book"></i>
+                        {% else %}
+                        <i class="fas fa-bell"></i>
+                        {% endif %}
+                    </div>
+                    <div class="notification-content">
+                        <h3>{{ notification.title }}</h3>
+                        <p>{{ notification.message }}</p>
+                        <span class="notification-time">
+                            <i class="fas fa-clock"></i>
+                            {{ notification.created_at.strftime('%d/%m/%Y às %H:%M') }}
+                        </span>
+                    </div>
+                    <div class="notification-actions">
+                        {% if not notification.is_read %}
+                        <form action="{{ url_for('mark_notification_read', id=notification.id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-read" title="Marcar como lida">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        <form action="{{ url_for('delete_notification', notification_id=notification.id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-delete" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-bell-slash"></i>
+                </div>
+                <h3>Nenhuma notificação</h3>
+                <p>Você não tem notificações no momento.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</div>
+
+<style>
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f5f7fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    padding: 30px;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-content {
+    margin-left: 70px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.header-content h1 {
+    font-size: 1.8rem;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.header-content h1 i {
+    color: #f5a623;
+}
+
+.header-content p {
+    color: #666;
+    margin: 5px 0 0 0;
+}
+
+.btn-mark-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.btn-mark-all:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+}
+
+/* Alert */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+}
+
+.alert-success {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.alert-error {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+/* Notifications List */
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.notification-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    background: #fff;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s;
+}
+
+.notification-card:hover {
+    transform: translateX(5px);
+}
+
+.notification-card.unread {
+    border-left: 4px solid #4facfe;
+    background: #f8fbff;
+}
+
+.notification-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.notification-icon.task { background: #e3f2fd; color: #1976d2; }
+.notification-icon.grade { background: #fff8e1; color: #f5a623; }
+.notification-icon.message { background: #e8f5e9; color: #388e3c; }
+.notification-icon.video { background: #f3e5f5; color: #7b1fa2; }
+.notification-icon.material { background: #fce4ec; color: #c2185b; }
+.notification-icon.info { background: #e0e0e0; color: #666; }
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-content h3 {
+    font-size: 1rem;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+}
+
+.notification-content p {
+    color: #666;
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.notification-time {
+    font-size: 0.8rem;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.notification-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-read, .btn-delete {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.btn-read {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.btn-read:hover {
+    background: #388e3c;
+    color: #fff;
+}
+
+.btn-delete {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.btn-delete:hover {
+    background: #d32f2f;
+    color: #fff;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.empty-icon {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #f5a623 0%, #f7931e 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 25px;
+}
+
+.empty-icon i {
+    font-size: 2.5rem;
+    color: #fff;
+}
+
+.empty-state h3 {
+    font-size: 1.4rem;
+    color: #1a1a2e;
+    margin: 0 0 10px 0;
+}
+
+.empty-state p {
+    color: #666;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .notification-card {
+        flex-direction: column;
+    }
+    
+    .notification-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+</style>
+{% endblock %}

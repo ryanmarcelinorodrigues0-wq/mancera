@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-box">
+        <div class="login-header">
+            <i class="fas fa-graduation-cap fa-3x text-primary"></i>
+            <h1>Mancera Consultoria Textual</h1>
+            <p>Plataforma Educacional - Preparação para Vestibulares</p>
+        </div>
+        <form method="POST" action="{{ url_for('login') }}" class="login-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    class="form-input"
+                    data-testid="login-email-input"
+                    required
+                />
+            </div>
+            <div class="form-group">
+                <label for="password">Senha</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    class="form-input"
+                    data-testid="login-password-input"
+                    required
+                />
+            </div>
+            <button type="submit" class="btn w-full" data-testid="login-submit-button">
+                Entrar
+            </button>
+        </form>
+        <div class="login-footer">
+            <p>Conta padrão: vitor@mancera.com / professor123</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: #007BFF;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    }
+    
+    .btn {
+        padding: 14px 24px;
+        background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    }
+    
+    .flash-messages {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 400px;
+    }
+    
+    .alert {
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideInRight 0.3s ease-out;
+    }
+    
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border-left: 4px solid #28a745;
+    }
+    
+    .alert-danger {
+        background: #f8d7da;
+        color: #721c24;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .alert-warning {
+        background: #fff3cd;
+        color: #856404;
+        border-left: 4px solid #ffc107;
+    }
+    
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+</style>
+
+<script>
+    // Auto-hide flash messages after 4 seconds
+    setTimeout(() => {
+        const flashMsg = document.getElementById('flash-msg');
+        if (flashMsg) {
+            flashMsg.style.opacity = '0';
+            setTimeout(() => flashMsg.remove(), 300);
+        }
+    }, 4000);
+</script>
+{% endblock %}

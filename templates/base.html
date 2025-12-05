@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mancera Consultoria Textual{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SweetAlert2 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages" id="flash-container">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" data-flash-category="{{ category }}" data-flash-message="{{ message }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
+    {% block content %}{% endblock %}
+    
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- SweetAlert2 Global Configuration -->
+    <script>
+    // Configuração global do SweetAlert2
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    });
+
+    // Mostrar flash messages com SweetAlert2
+    document.addEventListener('DOMContentLoaded', function() {
+        const flashContainer = document.getElementById('flash-container');
+        if (flashContainer) {
+            const flashMessages = flashContainer.querySelectorAll('[data-flash-message]');
+            flashMessages.forEach(function(msg, index) {
+                const category = msg.getAttribute('data-flash-category');
+                const message = msg.getAttribute('data-flash-message');
+                
+                let icon = 'info';
+                if (category === 'success') icon = 'success';
+                else if (category === 'error' || category === 'danger') icon = 'error';
+                else if (category === 'warning') icon = 'warning';
+                
+                setTimeout(function() {
+                    Toast.fire({
+                        icon: icon,
+                        title: message
+                    });
+                }, index * 300);
+            });
+            // Ocultar flash messages HTML
+            flashContainer.style.display = 'none';
+        }
+        
+        // Configurar confirmações para botões com data-confirm
+        setupConfirmButtons();
+    });
+
+    // Função para configurar botões de confirmação
+    function setupConfirmButtons() {
+        const confirmButtons = document.querySelectorAll('[data-confirm]');
+        confirmButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const message = this.getAttribute('data-confirm');
+                const form = this.closest('form');
+                const isDanger = this.classList.contains('btn-danger') || message.toLowerCase().includes('excluir');
+                
+                Swal.fire({
+                    title: isDanger ? 'Tem certeza?' : 'Confirmar ação',
+                    text: message,
+                    icon: isDanger ? 'warning' : 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: isDanger ? '#dc3545' : '#007BFF',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: isDanger ? 'Sim, excluir!' : 'Sim, confirmar',
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        if (form) {
+                            form.submit();
+                        } else if (this.tagName === 'A') {
+                            window.location.href = this.href;
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // Funções globais para alerts com SweetAlert2
+    window.showSuccess = function(title, text) {
+        return Swal.fire({
+            icon: 'success',
+            title: title,
+            text: text,
+            confirmButtonColor: '#28a745'
+        });
+    };
+
+    window.showError = function(title, text) {
+        return Swal.fire({
+            icon: 'error',
+            title: title,
+            text: text,
+            confirmButtonColor: '#dc3545'
+        });
+    };
+
+    window.showWarning = function(title, text) {
+        return Swal.fire({
+            icon: 'warning',
+            title: title,
+            text: text,
+            confirmButtonColor: '#ffc107'
+        });
+    };
+
+    window.showInfo = function(title, text) {
+        return Swal.fire({
+            icon: 'info',
+            title: title,
+            text: text,
+            confirmButtonColor: '#007BFF'
+        });
+    };
+
+    window.showToast = function(icon, title) {
+        Toast.fire({ icon: icon, title: title });
+    };
+
+    window.confirmAction = function(options) {
+        return Swal.fire({
+            title: options.title || 'Confirmar ação',
+            text: options.text || 'Deseja continuar?',
+            icon: options.icon || 'question',
+            showCancelButton: true,
+            confirmButtonColor: options.confirmColor || '#007BFF',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: options.confirmText || 'Confirmar',
+            cancelButtonText: options.cancelText || 'Cancelar',
+            reverseButtons: true
+        });
+    };
+
+    window.confirmDelete = function(itemName) {
+        return Swal.fire({
+            title: 'Excluir ' + (itemName || 'item') + '?',
+            text: 'Esta ação não pode ser desfeita!',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sim, excluir!',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
+        });
+    };
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
