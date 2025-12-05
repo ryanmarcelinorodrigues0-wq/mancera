@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+
+{% block title %}Sobre o Professor - Mancera{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <header class="page-header">
+            <div class="header-content">
+                <h1><i class="fas fa-chalkboard-teacher"></i> Sobre o Professor</h1>
+                <p class="header-subtitle">Conheça seu professor e seus recursos disponíveis</p>
+            </div>
+        </header>
+        
+        <!-- Card do Professor -->
+        <section class="professor-card">
+            <div class="professor-avatar">
+                <i class="fas fa-user-tie"></i>
+            </div>
+            <div class="professor-info">
+                <h2>{{ professor.name }}</h2>
+                <span class="professor-role"><i class="fas fa-graduation-cap"></i> Professor de Língua Portuguesa</span>
+                
+                <!-- Credenciais -->
+                <div class="professor-credentials">
+                    <div class="credential-item">
+                        <i class="fas fa-university"></i>
+                        <span>Mestre em Literaturas de Língua Portuguesa - UNESP</span>
+                    </div>
+                    <div class="credential-item">
+                        <i class="fas fa-certificate"></i>
+                        <span>Licenciado em Letras com formação bilíngue</span>
+                    </div>
+                    <div class="credential-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>São José do Rio Preto, SP</span>
+                    </div>
+                </div>
+                
+                {% if professor.bio %}
+                <p class="professor-bio">{{ professor.bio }}</p>
+                {% endif %}
+                
+                <div class="professor-contact">
+                    {% if professor.email %}
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>{{ professor.email }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if professor.phone %}
+                    <div class="contact-item">
+                        <i class="fas fa-phone"></i>
+                        <span>{{ professor.phone }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="professor-actions">
+                    <a href="{{ url_for('student_chat') }}" class="btn-contact">
+                        <i class="fas fa-comments"></i> Iniciar Conversa
+                    </a>
+                    <a href="https://br.linkedin.com/in/victormanceraviterbo" target="_blank" class="btn-linkedin">
+                        <i class="fab fa-linkedin"></i> LinkedIn
+                    </a>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Estatísticas do Professor -->
+        <section class="stats-section">
+            <h3 class="section-title"><i class="fas fa-chart-bar"></i> Recursos Disponíveis</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon videos">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ stats.total_videos }}</span>
+                        <span class="stat-label">Videoaulas</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon materials">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ stats.total_materials }}</span>
+                        <span class="stat-label">Materiais</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon tasks">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ stats.total_tasks }}</span>
+                        <span class="stat-label">Tarefas Criadas</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Links Rápidos -->
+        <section class="quick-links-section">
+            <h3 class="section-title"><i class="fas fa-link"></i> Acesso Rápido</h3>
+            <div class="quick-links-grid">
+                <a href="{{ url_for('student_videos') }}" class="quick-link-card">
+                    <div class="quick-link-icon">
+                        <i class="fas fa-play-circle"></i>
+                    </div>
+                    <div class="quick-link-info">
+                        <h4>Videoaulas</h4>
+                        <p>Assistir aulas em vídeo</p>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+                
+                <a href="{{ url_for('student_materials') }}" class="quick-link-card">
+                    <div class="quick-link-icon">
+                        <i class="fas fa-file-download"></i>
+                    </div>
+                    <div class="quick-link-info">
+                        <h4>Materiais</h4>
+                        <p>Baixar materiais de estudo</p>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+                
+                <a href="{{ url_for('student_tasks') }}" class="quick-link-card">
+                    <div class="quick-link-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <div class="quick-link-info">
+                        <h4>Tarefas</h4>
+                        <p>Ver tarefas pendentes</p>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+                
+                <a href="{{ url_for('student_chat') }}" class="quick-link-card">
+                    <div class="quick-link-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="quick-link-info">
+                        <h4>Chat</h4>
+                        <p>Conversar com o professor</p>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </section>
+    </main>
+</div>
+
+<style>
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    padding: 30px;
+}
+
+.page-header {
+    margin-bottom: 30px;
+}
+
+.header-content h1 {
+    font-size: 1.8rem;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.header-content h1 i {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.header-subtitle {
+    color: #666;
+    margin-top: 8px;
+}
+
+/* Professor Card */
+.professor-card {
+    background: linear-gradient(135deg, #fff 0%, #f8f9ff 100%);
+    border-radius: 20px;
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.15);
+    margin-bottom: 30px;
+    border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.professor-avatar {
+    width: 140px;
+    height: 140px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.professor-info {
+    flex: 1;
+}
+
+.professor-info h2 {
+    font-size: 1.8rem;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+}
+
+.professor-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.professor-credentials {
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.credential-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #444;
+    font-size: 0.95rem;
+}
+
+.credential-item i {
+    color: #667eea;
+    width: 20px;
+    text-align: center;
+}
+
+.professor-bio {
+    color: #555;
+    line-height: 1.7;
+    margin: 20px 0;
+    font-size: 1rem;
+    padding: 15px;
+    background: #f8f9ff;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+}
+
+.professor-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-linkedin {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #0077B5;
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 119, 181, 0.3);
+}
+
+.btn-linkedin:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 119, 181, 0.4);
+    background: #005885;
+}
+
+.professor-contact {
+    display: flex;
+    gap: 30px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #555;
+    font-size: 0.95rem;
+}
+
+.contact-item i {
+    color: #667eea;
+    font-size: 1.1rem;
+}
+
+.btn-contact {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-contact:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+/* Stats Section */
+.stats-section {
+    margin-bottom: 30px;
+}
+
+.section-title {
+    font-size: 1.2rem;
+    color: #1a1a2e;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title i {
+    color: #667eea;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.stat-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #fff;
+}
+
+.stat-icon.videos { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.stat-icon.materials { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.stat-icon.tasks { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.stat-icon.students { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+.stat-label {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Quick Links Section */
+.quick-links-section {
+    margin-bottom: 30px;
+}
+
+.quick-links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.quick-link-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    text-decoration: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.quick-link-card:hover {
+    transform: translateX(8px);
+    box-shadow: 0 8px 30px rgba(102, 126, 234, 0.15);
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
+.quick-link-card:hover .quick-link-icon {
+    transform: scale(1.1);
+}
+
+.quick-link-card:hover > .fa-arrow-right {
+    transform: translateX(5px);
+    color: #667eea;
+}
+
+.quick-link-icon {
+    width: 55px;
+    height: 55px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #fff;
+    transition: transform 0.3s ease;
+}
+
+.quick-link-info {
+    flex: 1;
+}
+
+.quick-link-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 1.05rem;
+    color: #1a1a2e;
+}
+
+.quick-link-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.quick-link-card > .fa-arrow-right {
+    color: #ccc;
+    transition: all 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .professor-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .professor-contact {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+    
+    .professor-card {
+        padding: 30px 20px;
+    }
+    
+    .professor-avatar {
+        width: 100px;
+        height: 100px;
+        font-size: 2.5rem;
+    }
+    
+    .professor-info h2 {
+        font-size: 1.4rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .quick-links-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,1426 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container" data-testid="professor-dashboard">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1><i class="fas fa-folder-open"></i> Central de Arquivos</h1>
+            <p class="page-subtitle">Gerencie todos os arquivos do sistema em um so lugar</p>
+        </div>
+        
+        <!-- Navegacao por Tabs -->
+        <div class="tabs-container">
+            <button class="tab-btn active" onclick="showSection('materials')" id="tab-materials">
+                <i class="fas fa-book"></i>
+                <span>Materiais de Apoio</span>
+                <span class="tab-count">{{ materials|length }}</span>
+            </button>
+            <button class="tab-btn" onclick="showSection('submissions')" id="tab-submissions">
+                <i class="fas fa-file-upload"></i>
+                <span>Arquivos dos Alunos</span>
+                <span class="tab-count">{{ student_submissions|length if student_submissions else 0 }}</span>
+            </button>
+            <button class="tab-btn" onclick="showSection('attachments')" id="tab-attachments">
+                <i class="fas fa-paperclip"></i>
+                <span>Anexos de Tarefas</span>
+                <span class="tab-count">{{ tasks_with_attachments|length if tasks_with_attachments else 0 }}</span>
+            </button>
+        </div>
+
+        <!-- Secao: Materiais de Apoio -->
+        <section class="content-section active" id="section-materials">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-book"></i>
+                    <h2>Materiais de Apoio</h2>
+                </div>
+                <button class="btn btn-primary" onclick="openModal('materialModal')">
+                    <i class="fas fa-plus"></i> Adicionar Material
+                </button>
+            </div>
+            
+            <div class="content-grid">
+                {% for material in materials %}
+                <div class="file-card">
+                    <div class="file-icon {{ material.file_type|lower if material.file_type else 'default' }}">
+                        {% if material.file_type == 'PDF' %}
+                        <i class="fas fa-file-pdf"></i>
+                        {% elif material.file_type == 'Imagem' %}
+                        <i class="fas fa-file-image"></i>
+                        {% elif material.file_type == 'Link' %}
+                        <i class="fas fa-link"></i>
+                        {% elif material.file_type == 'Apresentacao' %}
+                        <i class="fas fa-file-powerpoint"></i>
+                        {% else %}
+                        <i class="fas fa-file-alt"></i>
+                        {% endif %}
+                    </div>
+                    <div class="file-info">
+                        <h3>{{ material.title }}</h3>
+                        <span class="file-type-badge">{{ material.file_type or 'Arquivo' }}</span>
+                        <p class="file-description">{{ material.description[:80] }}{% if material.description|length > 80 %}...{% endif %}</p>
+                        {% if material.category %}
+                        <span class="file-category"><i class="fas fa-folder"></i> {{ material.category }}</span>
+                        {% endif %}
+                        <span class="file-date"><i class="fas fa-calendar"></i> {{ material.created_at.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                    <div class="file-actions">
+                        {% if material.file_url %}
+                        <a href="{{ material.file_url }}" target="_blank" class="btn-action download" title="Baixar">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('delete_material', id=material.id) }}" style="display:inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-action delete" data-confirm="Tem certeza que deseja excluir este material?" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <h3>Nenhum material cadastrado</h3>
+                    <p>Adicione materiais de apoio para seus alunos</p>
+                    <button class="btn btn-primary" onclick="openModal('materialModal')">
+                        <i class="fas fa-plus"></i> Adicionar Material
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Paginação dos Materiais -->
+            {% if materials_pagination and materials_pagination.pages > 1 %}
+            <div class="pagination-wrapper">
+                <div class="pagination-info">
+                    Mostrando {{ materials|length }} de {{ materials_pagination.total }} materiais
+                </div>
+                <div class="pagination">
+                    {% if materials_pagination.has_prev %}
+                    <a href="{{ url_for('professor_materials', page=materials_pagination.prev_num) }}" class="pagination-btn">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    {% endif %}
+
+                    {% for page_num in materials_pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                        {% if page_num %}
+                            {% if page_num != materials_pagination.page %}
+                            <a href="{{ url_for('professor_materials', page=page_num) }}" class="pagination-btn">{{ page_num }}</a>
+                            {% else %}
+                            <span class="pagination-btn active">{{ page_num }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="pagination-ellipsis">...</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if materials_pagination.has_next %}
+                    <a href="{{ url_for('professor_materials', page=materials_pagination.next_num) }}" class="pagination-btn">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Secao: Arquivos dos Alunos -->
+        <section class="content-section" id="section-submissions">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-file-upload"></i>
+                    <h2>Arquivos dos Alunos</h2>
+                </div>
+                <div class="filter-group">
+                    <select id="filterTask" onchange="filterSubmissions()" class="filter-select">
+                        <option value="">Todas as Tarefas</option>
+                        {% set seen_tasks = [] %}
+                        {% for submission in student_submissions %}
+                            {% if submission.task_id not in seen_tasks %}
+                                {% set _ = seen_tasks.append(submission.task_id) %}
+                                <option value="{{ submission.task_id }}">{{ submission.task.title }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="submissions-list" id="submissionsList">
+                {% if student_submissions %}
+                    {% for submission in student_submissions %}
+                    <div class="submission-file-card" data-task="{{ submission.task_id }}">
+                        <div class="student-avatar">
+                            {{ submission.student.name[:2]|upper }}
+                        </div>
+                        <div class="submission-info">
+                            <div class="submission-header">
+                                <h3>{{ submission.student.name }}</h3>
+                                <span class="submission-status {% if submission.is_late %}late{% else %}on-time{% endif %}">
+                                    {% if submission.is_late %}
+                                    <i class="fas fa-clock"></i> Atrasado
+                                    {% else %}
+                                    <i class="fas fa-check"></i> No prazo
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <p class="submission-task">
+                                <i class="fas fa-tasks"></i> {{ submission.task.title }}
+                            </p>
+                            <div class="submission-meta">
+                                <span><i class="fas fa-calendar"></i> {{ submission.submitted_at.strftime('%d/%m/%Y as %H:%M') }}</span>
+                                {% if submission.score is not none %}
+                                <span class="grade-badge {% if submission.score >= 7 %}good{% elif submission.score >= 5 %}average{% else %}low{% endif %}">
+                                    <i class="fas fa-star"></i> Nota: {{ "%.1f"|format(submission.score) }}
+                                </span>
+                                {% else %}
+                                <span class="pending-badge"><i class="fas fa-hourglass-half"></i> Pendente</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="submission-actions">
+                            <a href="{{ url_for('professor_download_submission', submission_id=submission.id) }}" class="btn-action download" title="Baixar Arquivo">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <a href="{{ url_for('view_task_submissions', task_id=submission.task_id) }}" class="btn-action view" title="Ver Detalhes">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                <!-- Paginação das Submissões -->
+                {% if submissions_pagination and submissions_pagination.pages > 1 %}
+                <div class="pagination-wrapper">
+                    <div class="pagination-info">
+                        Mostrando {{ student_submissions|length }} de {{ submissions_pagination.total }} arquivos
+                    </div>
+                    <div class="pagination">
+                        {% if submissions_pagination.has_prev %}
+                        <a href="{{ url_for('professor_materials', submissions_page=submissions_pagination.prev_num) }}" class="pagination-btn">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                        {% endif %}
+
+                        {% for page_num in submissions_pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                            {% if page_num %}
+                                {% if page_num != submissions_pagination.page %}
+                                <a href="{{ url_for('professor_materials', submissions_page=page_num) }}" class="pagination-btn">{{ page_num }}</a>
+                                {% else %}
+                                <span class="pagination-btn active">{{ page_num }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="pagination-ellipsis">...</span>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if submissions_pagination.has_next %}
+                        <a href="{{ url_for('professor_materials', submissions_page=submissions_pagination.next_num) }}" class="pagination-btn">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-inbox"></i>
+                    </div>
+                    <h3>Nenhum arquivo recebido</h3>
+                    <p>Quando os alunos enviarem arquivos nas tarefas, eles aparecerao aqui</p>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- Secao: Anexos de Tarefas -->
+        <section class="content-section" id="section-attachments">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-paperclip"></i>
+                    <h2>Anexos de Tarefas</h2>
+                </div>
+            </div>
+            
+            <div class="content-grid">
+                {% if tasks_with_attachments %}
+                    {% for task in tasks_with_attachments %}
+                    <div class="file-card attachment-card">
+                        <div class="file-icon attachment">
+                            <i class="fas fa-paperclip"></i>
+                        </div>
+                        <div class="file-info">
+                            <h3>{{ task.title }}</h3>
+                            <span class="file-type-badge attachment">Anexo de Tarefa</span>
+                            <p class="file-description">{{ task.description[:80] if task.description else 'Sem descricao' }}{% if task.description and task.description|length > 80 %}...{% endif %}</p>
+                            <div class="task-meta">
+                                <span class="file-date"><i class="fas fa-calendar"></i> Prazo: {{ task.due_date.strftime('%d/%m/%Y') }}</span>
+                                <span class="submissions-count"><i class="fas fa-users"></i> {{ task.submissions|length }} envio(s)</span>
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <a href="{{ url_for('download_task_attachment', task_id=task.id) }}" class="btn-action download" title="Baixar Anexo">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <a href="{{ url_for('view_task_submissions', task_id=task.id) }}" class="btn-action view" title="Ver Submissoes">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-paperclip"></i>
+                    </div>
+                    <h3>Nenhum anexo de tarefa</h3>
+                    <p>Adicione anexos ao criar novas tarefas</p>
+                    <a href="{{ url_for('professor_tasks') }}" class="btn btn-primary">
+                        <i class="fas fa-tasks"></i> Gerenciar Tarefas
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- Modal Material -->
+<div id="materialModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('materialModal')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-file-alt"></i> Novo Material</h2>
+            <span class="modal-close" onclick="closeModal('materialModal')">&times;</span>
+        </div>
+        
+        <form method="POST" action="{{ url_for('create_material') }}" enctype="multipart/form-data" class="modal-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-section">
+                <h3>Informacoes Basicas</h3>
+                <div class="form-group">
+                    <label>Titulo *</label>
+                    <input type="text" name="title" class="form-input" placeholder="Digite o titulo do material" required>
+                </div>
+                <div class="form-group">
+                    <label>Descricao *</label>
+                    <textarea name="description" class="form-input" rows="3" placeholder="Descreva o conteudo do material..." required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Tipo</label>
+                        <select name="file_type" class="form-input" onchange="toggleFileFields()">
+                            <option value="PDF">PDF</option>
+                            <option value="Texto">Documento de Texto</option>
+                            <option value="Link">Link Externo</option>
+                            <option value="Imagem">Imagem</option>
+                            <option value="Apresentacao">Apresentacao</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-folder"></i> Categoria</label>
+                        <input type="text" name="category" class="form-input" placeholder="Ex: Aula 1, Exercicios, etc.">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Conteudo do Material</h3>
+                <div class="upload-options">
+                    <div class="upload-option" id="fileUploadOption">
+                        <div class="upload-header">
+                            <i class="fas fa-upload"></i>
+                            <h4>Upload de Arquivo</h4>
+                        </div>
+                        <div class="form-group">
+                            <label>Selecione o arquivo</label>
+                            <div class="file-input-wrapper">
+                                <input type="file" name="file" id="fileInput" class="form-input file-input" 
+                                       accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.ppt,.pptx" 
+                                       onchange="updateFileName(this)">
+                                <label for="fileInput" class="file-input-label">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <span>Clique para selecionar ou arraste o arquivo</span>
+                                </label>
+                                <div class="file-name" id="fileName">Nenhum arquivo selecionado</div>
+                            </div>
+                            <small class="file-hint">Formatos suportados: PDF, Word, Texto, Imagens, PowerPoint</small>
+                        </div>
+                    </div>
+
+                    <div class="upload-divider">
+                        <span>ou</span>
+                    </div>
+
+                    <div class="upload-option" id="urlUploadOption">
+                        <div class="upload-header">
+                            <i class="fas fa-link"></i>
+                            <h4>Link Externo</h4>
+                        </div>
+                        <div class="form-group">
+                            <label>Cole a URL</label>
+                            <input type="url" name="file_url" id="urlInput" class="form-input" 
+                                   placeholder="https://exemplo.com/arquivo.pdf">
+                            <small class="file-hint">Links do Google Drive, YouTube, sites educacionais, etc.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('materialModal')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Material
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* ===== CONTEÚDO DA CENTRAL DE ARQUIVOS ===== */
+.page-header {
+    margin-bottom: 24px;
+}
+
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-header h1 i {
+    color: #007BFF;
+}
+
+.page-subtitle {
+    color: #6c757d;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Tabs */
+.tabs-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    background: white;
+    padding: 8px;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 20px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.tab-btn:hover {
+    background: #f8f9fa;
+    color: #007BFF;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.tab-btn i {
+    font-size: 18px;
+}
+
+.tab-count {
+    background: rgba(255,255,255,0.2);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tab-btn:not(.active) .tab-count {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* Content Sections */
+.content-section {
+    display: none;
+    background: white;
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+.content-section.active {
+    display: block;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.section-title i {
+    font-size: 24px;
+    color: #007BFF;
+}
+
+.section-title h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+/* Filter */
+.filter-group {
+    display: flex;
+    gap: 12px;
+}
+
+.filter-select {
+    padding: 10px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    font-size: 14px;
+    color: #495057;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 200px;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #007BFF;
+}
+
+/* Content Grid */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+/* File Card */
+.file-card {
+    background: #f8f9fa;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    gap: 16px;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.file-card:hover {
+    background: white;
+    border-color: #007BFF;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.file-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.file-icon.pdf { background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%); color: white; }
+.file-icon.imagem { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; }
+.file-icon.link { background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%); color: white; }
+.file-icon.apresentacao { background: linear-gradient(135deg, #fd7e14 0%, #dc6a11 100%); color: white; }
+.file-icon.default, .file-icon.texto { background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%); color: white; }
+.file-icon.attachment { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; }
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-info h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-type-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e7f3ff;
+    color: #007BFF;
+    margin-bottom: 8px;
+}
+
+.file-type-badge.attachment {
+    background: #e0f7fa;
+    color: #00838f;
+}
+
+.file-description {
+    font-size: 13px;
+    color: #6c757d;
+    margin: 0 0 10px 0;
+    line-height: 1.4;
+}
+
+.file-category, .file-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #999;
+    margin-right: 12px;
+}
+
+.task-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.submissions-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #007BFF;
+}
+
+.file-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-action {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    text-decoration: none;
+}
+
+.btn-action.download {
+    background: #e7f3ff;
+    color: #007BFF;
+}
+
+.btn-action.download:hover {
+    background: #007BFF;
+    color: white;
+}
+
+.btn-action.view {
+    background: #e8f5e9;
+    color: #28a745;
+}
+
+.btn-action.view:hover {
+    background: #28a745;
+    color: white;
+}
+
+.btn-action.delete {
+    background: #ffebee;
+    color: #dc3545;
+}
+
+.btn-action.delete:hover {
+    background: #dc3545;
+    color: white;
+}
+
+/* Submissions List */
+.submissions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.submission-file-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 14px;
+    transition: all 0.3s ease;
+    border-left: 4px solid #007BFF;
+}
+
+.submission-file-card:hover {
+    background: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.student-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.submission-info {
+    flex: 1;
+}
+
+.submission-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.submission-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.submission-status {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.submission-status.on-time {
+    background: #e8f5e9;
+    color: #28a745;
+}
+
+.submission-status.late {
+    background: #ffebee;
+    color: #dc3545;
+}
+
+.submission-task {
+    font-size: 13px;
+    color: #6c757d;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.submission-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: #999;
+}
+
+.grade-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.grade-badge.good { background: #e8f5e9; color: #28a745; }
+.grade-badge.average { background: #fff8e1; color: #f5a623; }
+.grade-badge.low { background: #ffebee; color: #dc3545; }
+
+.pending-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #fff8e1;
+    color: #f5a623;
+    font-weight: 600;
+}
+
+.submission-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    grid-column: 1 / -1;
+}
+
+.empty-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
+}
+
+.empty-icon i {
+    font-size: 32px;
+    color: white;
+}
+
+.empty-state h3 {
+    font-size: 18px;
+    color: #1a1a2e;
+    margin: 0 0 10px 0;
+}
+
+.empty-state p {
+    color: #6c757d;
+    margin: 0 0 20px 0;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+}
+
+.btn-secondary {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-secondary:hover {
+    background: #dee2e6;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 20px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.25);
+    z-index: 1001;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 30px;
+    border-bottom: 1px solid #e9ecef;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 20px 20px 0 0;
+}
+
+.modal-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.modal-header h2 i {
+    color: #007BFF;
+}
+
+.modal-close {
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #6c757d;
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #dc3545;
+    background: #f8f9fa;
+}
+
+.modal-form {
+    padding: 0;
+}
+
+.form-section {
+    padding: 24px 30px;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.form-section:last-of-type {
+    border-bottom: none;
+}
+
+.form-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Upload Options */
+.upload-options {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+}
+
+.upload-option {
+    flex: 1;
+    padding: 20px;
+    border: 2px dashed #e9ecef;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    background: #fafbfc;
+}
+
+.upload-option.active {
+    border-color: #007BFF;
+    background: #f0f8ff;
+}
+
+.upload-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.upload-header i {
+    font-size: 20px;
+    color: #007BFF;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.upload-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.upload-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.upload-divider span {
+    background: white;
+    padding: 8px 16px;
+    color: #6c757d;
+    font-weight: 500;
+    z-index: 1;
+    border-radius: 20px;
+    border: 1px solid #e9ecef;
+}
+
+/* File Input Styles */
+.file-input-wrapper {
+    position: relative;
+}
+
+.file-input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-input-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    gap: 10px;
+}
+
+.file-input-label:hover {
+    border-color: #007BFF;
+    background: #f8f9fa;
+}
+
+.file-input-label i {
+    font-size: 28px;
+    color: #6c757d;
+}
+
+.file-input-label span {
+    color: #495057;
+    font-size: 13px;
+}
+
+.file-name {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #e7f3ff;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #007BFF;
+    font-weight: 500;
+    text-align: center;
+}
+
+.file-hint {
+    display: block;
+    margin-top: 8px;
+    color: #999;
+    font-size: 12px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 20px 30px;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+    border-radius: 0 0 20px 20px;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .tabs-container {
+        flex-wrap: wrap;
+    }
+    
+    .tab-btn {
+        flex: 1 1 calc(50% - 6px);
+    }
+    
+    .tab-btn span:not(.tab-count) {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 20px;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .file-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .file-actions {
+        flex-direction: row;
+        justify-content: center;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .submission-file-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .submission-actions {
+        justify-content: center;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .upload-options {
+        flex-direction: column;
+    }
+    
+    .tab-btn {
+        flex: 1 1 100%;
+    }
+}
+
+/* ===== PAGINAÇÃO ===== */
+.pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e9ecef;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.pagination-info {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-btn {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: white;
+    color: #212529;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.pagination-btn:hover {
+    background: #f8f9fa;
+    border-color: #007BFF;
+    color: #007BFF;
+}
+
+.pagination-btn.active {
+    background: #007BFF;
+    border-color: #007BFF;
+    color: white;
+}
+
+.pagination-ellipsis {
+    padding: 0.5rem;
+    color: #6c757d;
+}
+
+@media (max-width: 768px) {
+    .pagination-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+// Tab Navigation
+function showSection(sectionName) {
+    // Hide all sections
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    // Remove active from all tabs
+    document.querySelectorAll('.tab-btn').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Show selected section
+    document.getElementById('section-' + sectionName).classList.add('active');
+    
+    // Activate selected tab
+    document.getElementById('tab-' + sectionName).classList.add('active');
+}
+
+// Filter Submissions
+function filterSubmissions() {
+    const taskId = document.getElementById('filterTask').value;
+    const submissions = document.querySelectorAll('.submission-file-card');
+    
+    submissions.forEach(card => {
+        if (!taskId || card.dataset.task === taskId) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Modal Functions
+function openModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    resetModal();
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function resetModal() {
+    document.getElementById('fileName').textContent = 'Nenhum arquivo selecionado';
+    document.getElementById('fileInput').value = '';
+    document.getElementById('urlInput').value = '';
+    toggleFileFields();
+}
+
+function updateFileName(input) {
+    const fileName = input.files[0] ? input.files[0].name : 'Nenhum arquivo selecionado';
+    document.getElementById('fileName').textContent = fileName;
+}
+
+function toggleFileFields() {
+    const fileType = document.querySelector('select[name="file_type"]').value;
+    const fileOption = document.getElementById('fileUploadOption');
+    const urlOption = document.getElementById('urlUploadOption');
+    
+    if (fileType === 'Link') {
+        fileOption.classList.remove('active');
+        urlOption.classList.add('active');
+    } else {
+        fileOption.classList.add('active');
+        urlOption.classList.remove('active');
+    }
+}
+
+// Close modal on overlay click
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        closeModal(event.target.id);
+    }
+}
+
+// Close modal with ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'flex') {
+                closeModal(modal.id);
+            }
+        });
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    toggleFileFields();
+    
+    // Confirm delete
+    document.querySelectorAll('[data-confirm]').forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (!confirm(this.dataset.confirm)) {
+                e.preventDefault();
+            }
+        });
+    });
+});
+
+// Drag and drop
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('fileInput');
+    const fileLabel = document.querySelector('.file-input-label');
+    
+    if (fileLabel) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, () => {
+                fileLabel.style.borderColor = '#007BFF';
+                fileLabel.style.background = '#f0f8ff';
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            fileLabel.addEventListener(eventName, () => {
+                fileLabel.style.borderColor = '#dee2e6';
+                fileLabel.style.background = 'white';
+            }, false);
+        });
+        
+        fileLabel.addEventListener('drop', function(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                updateFileName(fileInput);
+            }
+        }, false);
+    }
+});
+</script>
+{% endblock %}

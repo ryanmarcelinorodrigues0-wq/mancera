@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+
+{% block title %}Videoaulas - Mancera{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <div class="content-section">
+            <div class="section-header">
+                <h1>Videoaulas</h1>
+                <p class="section-subtitle">Assista às aulas disponíveis para você</p>
+            </div>
+            
+            <!-- Barra de Ferramentas -->
+            <div class="tools-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Pesquisar videoaulas..." onkeyup="filterVideos()">
+                </div>
+                <div class="filters">
+                    <select id="categoryFilter" onchange="filterVideos()" class="filter-select">
+                        <option value="">Todas as categorias</option>
+                        {% for category in categories %}
+                        <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="sortFilter" onchange="sortVideos()" class="filter-select">
+                        <option value="recent">Mais recentes</option>
+                        <option value="oldest">Mais antigas</option>
+                        <option value="title">Título (A-Z)</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="grid" onclick="setView('grid')">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button class="view-btn" data-view="list" onclick="setView('list')">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grid de Vídeos -->
+            {% if videos %}
+            <div class="content-grid" id="videosContainer">
+                {% for video in videos %}
+                <div class="modern-card video-card" 
+                     data-category="{{ video.category or '' }}" 
+                     data-date="{{ video.created_at.timestamp() }}" 
+                     data-title="{{ video.title.lower() }}">
+                    <div class="card-header">
+                        <div class="video-thumbnail">
+                            <i class="fas fa-play"></i>
+                        </div>
+                        <div class="card-badge">
+                            {% if video.difficulty %}
+                            <span class="badge badge-{{ video.difficulty }}">
+                                {% if video.difficulty == 'easy' %}Fácil
+                                {% elif video.difficulty == 'medium' %}Médio
+                                {% else %}Difícil
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <h3>{{ video.title }}</h3>
+                        <p class="card-category">{{ video.category or 'Sem categoria' }}</p>
+                        <p class="card-description">{{ video.description[:100] }}{% if video.description|length > 100 %}...{% endif %}</p>
+                        
+                        <div class="video-info">
+                            <div class="info-item">
+                                <i class="fas fa-eye"></i>
+                                <span>{{ video.views or 0 }} visualizações</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-clock"></i>
+                                <span>{{ video.created_at.strftime('%d/%m/%Y') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-actions">
+                        <a href="{{ url_for('student_watch_video', video_id=video.id) }}" class="btn btn-primary">
+                            <i class="fas fa-play"></i> Assistir Aula
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-video"></i>
+                </div>
+                <h3>Nenhuma videoaula disponível</h3>
+                <p>O professor ainda não adicionou videoaulas. Volte mais tarde!</p>
+            </div>
+            {% endif %}
+            
+            <!-- Sem resultados -->
+            <div class="empty-state" id="noResults" style="display: none;">
+                <div class="empty-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <h3>Nenhum resultado encontrado</h3>
+                <p>Tente ajustar seus filtros ou termo de busca</p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+/* ===== LAYOUT ===== */
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f8f9fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 280px;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.section-header {
+    margin-bottom: 24px;
+}
+
+.section-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+
+.section-subtitle {
+    color: #6c757d;
+    margin: 8px 0 0 0;
+}
+
+/* ===== TOOLS BAR ===== */
+.tools-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+    max-width: 400px;
+}
+
+.search-box i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 12px 16px 12px 42px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.filter-select {
+    padding: 12px 36px 12px 16px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: white;
+    color: #495057;
+    font-size: 0.9rem;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23666' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #007BFF;
+}
+
+.view-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.view-btn {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #e9ecef;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #6c757d;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-btn:hover, .view-btn.active {
+    border-color: #007BFF;
+    background: #007BFF;
+    color: white;
+}
+
+/* ===== GRID ===== */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.content-grid.list-view {
+    grid-template-columns: 1fr;
+}
+
+.content-grid.list-view .modern-card {
+    display: flex;
+    flex-direction: row;
+}
+
+.content-grid.list-view .card-header {
+    width: 180px;
+    flex-shrink: 0;
+    border-radius: 12px 0 0 12px;
+    padding: 0;
+}
+
+.content-grid.list-view .video-thumbnail {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px 0 0 12px;
+}
+
+.content-grid.list-view .card-body {
+    flex: 1;
+    padding: 20px;
+}
+
+.content-grid.list-view .card-actions {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    border-left: 1px solid #e9ecef;
+    border-top: none;
+}
+
+/* ===== CARD ===== */
+.modern-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.modern-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    padding: 20px 20px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.video-thumbnail {
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
+}
+
+.card-badge {
+    display: flex;
+    gap: 6px;
+}
+
+.badge {
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-easy {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-medium {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-hard {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.card-body {
+    padding: 0 20px 20px;
+}
+
+.card-body h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: #212529;
+    line-height: 1.3;
+}
+
+.card-category {
+    color: #007BFF;
+    font-weight: 500;
+    margin: 0 0 10px 0;
+    font-size: 0.85rem;
+}
+
+.card-description {
+    color: #6c757d;
+    line-height: 1.5;
+    margin: 0 0 16px 0;
+    font-size: 0.9rem;
+}
+
+.video-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.info-item i {
+    width: 16px;
+    color: #007BFF;
+}
+
+.card-actions {
+    padding: 16px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+}
+
+.empty-icon i {
+    font-size: 2rem;
+    color: white;
+}
+
+.empty-state h3 {
+    font-size: 1.4rem;
+    color: #212529;
+    margin: 0 0 10px 0;
+}
+
+.empty-state p {
+    color: #6c757d;
+    margin: 0;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+        padding-top: 70px;
+    }
+    
+    .content-section {
+        padding: 20px;
+    }
+    
+    .tools-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-box {
+        max-width: none;
+    }
+    
+    .filters {
+        flex-wrap: wrap;
+    }
+    
+    .filter-select {
+        flex: 1;
+        min-width: 140px;
+    }
+    
+    .view-toggle {
+        margin-left: auto;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .content-grid.list-view .modern-card {
+        flex-direction: column;
+    }
+    
+    .content-grid.list-view .card-header {
+        width: 100%;
+        border-radius: 12px 12px 0 0;
+        padding: 20px;
+    }
+    
+    .content-grid.list-view .video-thumbnail {
+        border-radius: 12px;
+        width: 70px;
+        height: 70px;
+    }
+    
+    .content-grid.list-view .card-actions {
+        border-left: none;
+        border-top: 1px solid #e9ecef;
+    }
+}
+</style>
+
+<script>
+let allVideos = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('videosContainer');
+    if (container) {
+        allVideos = Array.from(container.querySelectorAll('.video-card'));
+    }
+});
+
+function filterVideos() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const category = document.getElementById('categoryFilter').value;
+    const container = document.getElementById('videosContainer');
+    const noResults = document.getElementById('noResults');
+    
+    let visibleCount = 0;
+    
+    allVideos.forEach(card => {
+        const title = card.dataset.title;
+        const cardCategory = card.dataset.category;
+        
+        const matchesSearch = !searchTerm || title.includes(searchTerm);
+        const matchesCategory = !category || cardCategory === category;
+        
+        if (matchesSearch && matchesCategory) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    if (container) container.style.display = visibleCount === 0 ? 'none' : '';
+    if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+}
+
+function sortVideos() {
+    const sort = document.getElementById('sortFilter').value;
+    const container = document.getElementById('videosContainer');
+    
+    const visibleCards = allVideos.filter(c => c.style.display !== 'none');
+    
+    visibleCards.sort((a, b) => {
+        if (sort === 'recent') {
+            return parseFloat(b.dataset.date) - parseFloat(a.dataset.date);
+        } else if (sort === 'oldest') {
+            return parseFloat(a.dataset.date) - parseFloat(b.dataset.date);
+        } else if (sort === 'title') {
+            return a.dataset.title.localeCompare(b.dataset.title);
+        }
+        return 0;
+    });
+    
+    visibleCards.forEach(card => container.appendChild(card));
+}
+
+function setView(view) {
+    const container = document.getElementById('videosContainer');
+    const buttons = document.querySelectorAll('.view-btn');
+    
+    buttons.forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`[data-view="${view}"]`).classList.add('active');
+    
+    if (container) {
+        if (view === 'list') {
+            container.classList.add('list-view');
+        } else {
+            container.classList.remove('list-view');
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,1573 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="content-section">
+            <div class="section-header">
+                <h1>Videoaulas</h1>
+                <button class="btn btn-primary" onclick="openModal('videoModal')">
+                    <i class="fas fa-plus"></i> Adicionar Videoaula
+                </button>
+            </div>
+
+            <!-- Barra de Ferramentas -->
+            <div class="tools-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Pesquisar videoaulas..." onkeyup="filterVideos()">
+                    <button class="search-clear" onclick="clearSearch()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="filters">
+                    <select id="difficultyFilter" onchange="filterVideos()" class="filter-select">
+                        <option value="all">Todas as dificuldades</option>
+                        <option value="easy">Fácil</option>
+                        <option value="medium">Médio</option>
+                        <option value="hard">Difícil</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Conteúdo das Videoaulas -->
+            <div id="videosContainer">
+                {% if videos %}
+                <div class="content-grid">
+                    {% for video in videos %}
+                    <div class="modern-card video-card" data-video-id="{{ video.id }}" data-difficulty="{{ video.difficulty }}">
+                        <div class="card-header">
+                            <div class="video-thumbnail">
+                                <i class="fas fa-play"></i>
+                            </div>
+                            <div class="card-badge">
+                                <span class="badge badge-{{ video.difficulty }}">
+                                    {% if video.difficulty == 'easy' %}Fácil
+                                    {% elif video.difficulty == 'medium' %}Médio
+                                    {% else %}Difícil
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <h3>{{ video.title }}</h3>
+                            <p class="card-category">{{ video.category or 'Sem categoria' }}</p>
+                            <p class="card-description">{{ video.description[:120] }}{% if video.description|length > 120 %}...{% endif %}</p>
+                            
+                            <div class="video-info">
+                                <div class="info-item">
+                                    <i class="fas fa-eye"></i>
+                                    <span>{{ video.views }} visualizações</span>
+                                </div>
+                                <div class="info-item">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Postado em {{ video.created_at.strftime('%d/%m/%Y') if video.created_at else 'Data não informada' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-actions">
+                            <a href="{{ url_for('professor_video_detail', video_id=video.id) }}" class="btn btn-sm btn-outline">
+                                <i class="fas fa-play"></i> Assistir
+                            </a>
+                            <button class="btn btn-sm btn-primary" onclick="editVideo({{ video.id }})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <form method="POST" action="{{ url_for('delete_video', id=video.id) }}" style="display:inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger" data-confirm="Tem certeza que deseja excluir esta videoaula?">
+                                    <i class="fas fa-trash"></i> Excluir
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Paginação -->
+                {% if pagination and pagination.pages > 1 %}
+                <div class="pagination-wrapper">
+                    <div class="pagination-info">
+                        Mostrando {{ videos|length }} de {{ pagination.total }} videoaulas
+                    </div>
+                    <div class="pagination">
+                        {% if pagination.has_prev %}
+                        <a href="{{ url_for('professor_videos', page=pagination.prev_num) }}" class="pagination-btn">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                        {% endif %}
+
+                        {% for page_num in pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                            {% if page_num %}
+                                {% if page_num != pagination.page %}
+                                <a href="{{ url_for('professor_videos', page=page_num) }}" class="pagination-btn">{{ page_num }}</a>
+                                {% else %}
+                                <span class="pagination-btn active">{{ page_num }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="pagination-ellipsis">...</span>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if pagination.has_next %}
+                        <a href="{{ url_for('professor_videos', page=pagination.next_num) }}" class="pagination-btn">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% else %}
+                <!-- Empty State -->
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <h3>Nenhuma videoaula cadastrada</h3>
+                    <p>Comece criando sua primeira videoaula</p>
+                    <button class="btn btn-primary" onclick="openModal('videoModal')">
+                        <i class="fas fa-plus"></i> Criar Primeira Videoaula
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal Criar Video -->
+<div id="videoModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('videoModal')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-video"></i> Nova Videoaula</h2>
+            <span class="modal-close" onclick="closeModal('videoModal')">&times;</span>
+        </div>
+        
+        <form method="POST" action="{{ url_for('create_video') }}" class="modal-form" id="videoForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="video_id" id="videoId">
+            <div class="modal-body">
+                <div class="form-section">
+                    <h3>Informações Básicas</h3>
+                    <div class="form-group">
+                        <label><i class="fas fa-heading"></i> Título da Videoaula *</label>
+                        <input type="text" name="title" id="videoTitle" class="form-input" placeholder="Digite um título atrativo para a videoaula" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-align-left"></i> Descrição *</label>
+                        <textarea name="description" id="videoDescription" class="form-input" rows="4" placeholder="Descreva o conteúdo da videoaula..." required></textarea>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Configurações do Vídeo</h3>
+                    <div class="form-group">
+                        <label><i class="fas fa-link"></i> URL do Vídeo *</label>
+                        <input type="url" name="video_url" id="videoUrl" class="form-input" placeholder="https://www.youtube.com/watch?v=..." required>
+                        <small class="form-hint">Suporte para YouTube, Vimeo e links diretos de vídeo</small>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-tag"></i> Categoria</label>
+                            <input type="text" name="category" id="videoCategory" class="form-input" placeholder="Ex: Matemática, Programação...">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-chart-line"></i> Nível de Dificuldade</label>
+                            <select name="difficulty" id="videoDifficulty" class="form-input">
+                                <option value="easy">Fácil - Iniciante</option>
+                                <option value="medium" selected>Médio - Intermediário</option>
+                                <option value="hard">Difícil - Avançado</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('videoModal')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary" id="videoSubmitBtn">
+                    <i class="fas fa-save"></i> Salvar Videoaula
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Preview Video -->
+<div id="previewModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('previewModal')"></div>
+    <div class="modal-container large">
+        <div class="modal-header">
+            <div class="video-header-info">
+                <h2 id="previewVideoTitle"><i class="fas fa-play-circle"></i> Carregando...</h2>
+                <div class="video-meta">
+                    <span class="badge" id="previewVideoDifficulty">Médio</span>
+                    <span><i class="fas fa-eye"></i> <span id="previewVideoViews">0</span> visualizações</span>
+                    <span><i class="fas fa-clock"></i> <span id="previewVideoDate">--/--/----</span></span>
+                </div>
+            </div>
+            <span class="modal-close" onclick="closeModal('previewModal')">&times;</span>
+        </div>
+        
+        <div class="modal-body">
+            <div class="preview-content">
+                <div class="video-player-section">
+                    <div id="videoPreview" class="video-preview-container">
+                        <!-- O conteúdo do vídeo será carregado aqui via JavaScript -->
+                    </div>
+                    
+                    <div class="video-description">
+                        <h4>Descrição</h4>
+                        <p id="previewVideoDescription">Carregando descrição...</p>
+                    </div>
+                </div>
+                
+                <div class="comments-section">
+                    <div class="comments-header">
+                        <h4><i class="fas fa-comments"></i> Comentários</h4>
+                        <span class="comments-count" id="commentsCount">0 comentários</span>
+                    </div>
+                    
+                    <div class="add-comment">
+                        <div class="comment-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="comment-input-container">
+                            <textarea id="newComment" placeholder="Adicione um comentário..." rows="3"></textarea>
+                            <div class="comment-actions">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="clearComment()">Cancelar</button>
+                                <button type="button" class="btn btn-sm btn-primary" onclick="addComment()">Comentar</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="comments-list" id="commentsList">
+                        <div class="no-comments">
+                            <i class="fas fa-comment-slash"></i>
+                            <p>Nenhum comentário ainda. Seja o primeiro a comentar!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ===== VARIABLES ===== */
+:root {
+    --primary: #007bff;
+    --primary-dark: #0056b3;
+    --success: #28a745;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --dark: #343a40;
+    --light: #f8f9fa;
+    --border: #e9ecef;
+    --text: #212529;
+    --text-muted: #6c757d;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+}
+
+/* ===== CONTEÚDO DAS VIDEOAULAS ===== */
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    max-width: 100%;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.section-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+
+/* ===== BARRA DE FERRAMENTAS ===== */
+.tools-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+}
+
+.search-box i {
+    position: absolute;
+    left: 1rem;
+    color: var(--text-muted);
+    z-index: 2;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background: white;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.search-clear {
+    position: absolute;
+    right: 0.75rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.search-clear:hover {
+    color: var(--danger);
+    background: var(--light);
+}
+
+.filters {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.filter-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text);
+    font-size: 0.95rem;
+    cursor: pointer;
+    min-width: 160px;
+}
+
+/* ===== VIDEO CARDS ===== */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.modern-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+    padding: 1.5rem 1.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.video-thumbnail {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    position: relative;
+}
+
+.video-thumbnail::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 12px solid white;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    left: 50%;
+    top: 50%;
+    transform: translate(-40%, -50%);
+}
+
+.card-badge {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.card-body {
+    padding: 0 1.5rem 1.5rem;
+}
+
+.card-body h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--dark);
+    line-height: 1.3;
+}
+
+.card-category {
+    color: var(--primary);
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.card-description {
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.video-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.info-item i {
+    width: 14px;
+    color: var(--primary);
+}
+
+.card-actions {
+    padding: 1rem 1.5rem;
+    background: var(--light);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-actions .btn {
+    flex: 1;
+    min-width: 80px;
+    text-align: center;
+    justify-content: center;
+}
+
+/* ===== BADGES ===== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.badge-easy {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.badge-medium {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.badge-hard {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* ===== BOTÕES CORRIGIDOS ===== */
+.btn {
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+    text-align: center;
+    justify-content: center;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--danger), #c82333);
+    color: white;
+}
+
+.btn-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+
+.btn-outline:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    color: var(--border);
+    margin-bottom: 1.5rem;
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    color: var(--dark);
+    margin: 0 0 1rem 0;
+}
+
+.empty-state p {
+    color: var(--text-muted);
+    margin: 0 0 2rem 0;
+    font-size: 1.1rem;
+}
+
+/* ===== MODAIS CORRIGIDOS ===== */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    z-index: 1001;
+}
+
+.modal-container.large {
+    max-width: 1000px;
+    width: 95%;
+    max-height: 95vh;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--light);
+}
+
+.video-header-info h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.video-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+.modal-close {
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.modal-close:hover {
+    color: var(--danger);
+    background: var(--border);
+}
+
+.modal-body {
+    padding: 2rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--border);
+    background: var(--light);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* ===== PREVIEW CONTENT CORRIGIDO ===== */
+.preview-content {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 2rem;
+    height: 100%;
+}
+
+.video-player-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.video-preview-container {
+    width: 100%;
+    background: #000;
+    border-radius: var(--radius);
+    overflow: hidden;
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+}
+
+.video-preview-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.video-description {
+    background: var(--light);
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.video-description h4 {
+    margin: 0 0 1rem 0;
+    color: var(--dark);
+    font-size: 1.1rem;
+}
+
+.video-description p {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* ===== SEÇÃO DE COMENTÁRIOS CORRIGIDA ===== */
+.comments-section {
+    border-left: 1px solid var(--border);
+    padding-left: 2rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.comments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.comments-header h4 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--dark);
+}
+
+.comments-count {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.add-comment {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--light);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.comment-avatar {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.comment-input-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.comment-input-container textarea {
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+}
+
+.comment-input-container textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.comment-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.comments-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.no-comments {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted);
+}
+
+.no-comments i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-comments p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.comment-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    animation: fadeIn 0.3s ease-out;
+    position: relative;
+}
+
+.comment-item:hover .comment-actions-small {
+    opacity: 1;
+}
+
+.comment-content {
+    flex: 1;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.comment-author {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.95rem;
+}
+
+.comment-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.comment-text {
+    color: var(--text);
+    line-height: 1.5;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.comment-actions-small {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.comment-actions-small .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 4px;
+}
+
+.comment-actions-small .btn:hover {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== FORM STYLES ===== */
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.form-section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-label i {
+    color: var(--primary);
+    width: 16px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background: white;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 1024px) {
+    .preview-content {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    
+    .comments-section {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding-left: 0;
+        padding-top: 1.5rem;
+        height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 20px;
+    }
+    
+    .content-section {
+        padding: 24px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .tools-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-box {
+        min-width: auto;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .modal-container {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .modal-body {
+        padding: 1.5rem;
+    }
+    
+    .modal-header,
+    .modal-footer {
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .card-actions {
+        flex-direction: column;
+    }
+    
+    .video-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .add-comment {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 16px;
+    }
+    
+    .content-section {
+        padding: 20px;
+    }
+    
+    .card-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .card-badge {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* ===== PAGINAÇÃO ===== */
+.pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.pagination-info {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-btn {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.pagination-btn:hover {
+    background: var(--light);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.pagination-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.pagination-ellipsis {
+    padding: 0.5rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .pagination-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+// JavaScript corrigido - Comentários funcionando e vídeo aparecendo
+let allVideos = [];
+let currentVideoId = null;
+let videoComments = {};
+
+// Dados de exemplo para comentários - AGORA VAZIO
+const sampleComments = {
+    // Removidos todos os comentários de exemplo
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeVideos();
+});
+
+function initializeVideos() {
+    const videoElements = document.querySelectorAll('.video-card');
+    allVideos = Array.from(videoElements).map(card => {
+        // Obter texto de visualizações com verificação
+        const viewsElement = card.querySelector('.info-item:nth-child(1) span');
+        const viewsText = viewsElement ? viewsElement.textContent : '0';
+        const views = parseInt(viewsText) || 0;
+        
+        // Obter data com verificação
+        const dateElement = card.querySelector('.info-item:nth-child(2) span');
+        const dateText = dateElement ? dateElement.textContent.replace('Postado em ', '') : '';
+        
+        // Obter título, categoria e descrição com verificação
+        const titleElement = card.querySelector('h3');
+        const categoryElement = card.querySelector('.card-category');
+        const descriptionElement = card.querySelector('.card-description');
+        
+        return {
+            element: card,
+            id: card.dataset.videoId,
+            title: titleElement ? titleElement.textContent.trim() : '',
+            category: categoryElement ? categoryElement.textContent.trim() : '',
+            description: descriptionElement ? descriptionElement.textContent.trim() : '',
+            views: views,
+            date: dateText,
+            difficulty: card.dataset.difficulty || 'medium'
+        };
+    });
+    
+    // Inicializar comentários
+    videoComments = { ...sampleComments };
+    
+    console.log('Videos inicializados:', allVideos.length);
+}
+
+function filterVideos() {
+    const searchInput = document.getElementById('searchInput');
+    const difficultySelect = document.getElementById('difficultyFilter');
+    
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const difficultyFilter = difficultySelect ? difficultySelect.value : 'all';
+    
+    let visibleCount = 0;
+    
+    allVideos.forEach(video => {
+        const videoTitle = (video.title || '').toLowerCase();
+        const videoCategory = (video.category || '').toLowerCase();
+        const videoDifficulty = video.difficulty || 'medium';
+        
+        const matchesSearch = searchTerm === '' || 
+                            videoTitle.includes(searchTerm) || 
+                            videoCategory.includes(searchTerm);
+        
+        const matchesDifficulty = difficultyFilter === 'all' || videoDifficulty === difficultyFilter;
+        
+        const isVisible = matchesSearch && matchesDifficulty;
+        video.element.style.display = isVisible ? '' : 'none';
+        
+        if (isVisible) visibleCount++;
+    });
+    
+    // Mostrar/ocultar mensagem de "nenhum resultado"
+    const container = document.getElementById('videosContainer');
+    const emptyState = container ? container.querySelector('.empty-state') : null;
+    const grid = container ? container.querySelector('.content-grid') : null;
+    
+    if (allVideos.length > 0 && visibleCount === 0) {
+        // Criar mensagem de nenhum resultado se não existir
+        if (grid && !container.querySelector('.no-results')) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <div class="empty-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>Nenhuma videoaula encontrada</h3>
+                    <p>Tente ajustar os filtros de busca</p>
+                </div>
+            `;
+            container.appendChild(noResults);
+        }
+    } else {
+        // Remover mensagem se existir
+        const noResults = container ? container.querySelector('.no-results') : null;
+        if (noResults) noResults.remove();
+    }
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    filterVideos();
+}
+
+function openModal(modalId) {
+    document.getElementById(modalId).style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
+    
+    // Limpar preview quando fechar o modal
+    if (modalId === 'previewModal') {
+        const previewContainer = document.getElementById('videoPreview');
+        previewContainer.innerHTML = '';
+        currentVideoId = null;
+    }
+    
+    // Limpar formulário quando fechar o modal de vídeo
+    if (modalId === 'videoModal') {
+        resetVideoForm();
+    }
+}
+
+function resetVideoForm() {
+    document.getElementById('videoForm').reset();
+    document.getElementById('videoId').value = '';
+    document.getElementById('videoSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Salvar Videoaula';
+    document.querySelector('#videoModal .modal-header h2').innerHTML = '<i class="fas fa-video"></i> Nova Videoaula';
+    document.getElementById('videoDifficulty').value = 'medium';
+}
+
+function editVideo(videoId) {
+    const video = allVideos.find(v => v.id == videoId);
+    
+    if (video) {
+        // Preencher o formulário com os dados do vídeo
+        document.getElementById('videoId').value = video.id;
+        document.getElementById('videoTitle').value = video.title;
+        document.getElementById('videoDescription').value = video.description;
+        document.getElementById('videoUrl').value = video.videoUrl;
+        document.getElementById('videoCategory').value = video.category;
+        document.getElementById('videoDifficulty').value = video.difficulty;
+        
+        // Atualizar o título do modal e botão
+        document.querySelector('#videoModal .modal-header h2').innerHTML = '<i class="fas fa-edit"></i> Editar Videoaula';
+        document.getElementById('videoSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Atualizar Videoaula';
+        
+        // Alterar a ação do formulário para edição
+        const form = document.getElementById('videoForm');
+        form.action = "/professor/update_video/" + video.id;
+        
+        // Abrir o modal
+        openModal('videoModal');
+    } else {
+        showNotification('Vídeo não encontrado!', 'error');
+    }
+}
+
+function previewVideo(videoId, videoUrl) {
+    currentVideoId = videoId;
+    const video = allVideos.find(v => v.id == videoId);
+    
+    if (video) {
+        // Atualizar informações do vídeo
+        document.getElementById('previewVideoTitle').innerHTML = `<i class="fas fa-play-circle"></i> ${video.title}`;
+        document.getElementById('previewVideoDescription').textContent = video.description;
+        document.getElementById('previewVideoViews').textContent = video.views;
+        document.getElementById('previewVideoDate').textContent = video.date;
+        
+        // Atualizar badge de dificuldade
+        const difficultyBadge = document.getElementById('previewVideoDifficulty');
+        difficultyBadge.textContent = video.difficulty === 'easy' ? 'Fácil' : video.difficulty === 'medium' ? 'Médio' : 'Difícil';
+        difficultyBadge.className = `badge badge-${video.difficulty}`;
+        
+        // Carregar vídeo
+        const previewContainer = document.getElementById('videoPreview');
+        previewContainer.innerHTML = '';
+        
+        const iframe = document.createElement('iframe');
+        iframe.src = getEmbedUrl(videoUrl || video.videoUrl);
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.allowFullscreen = true;
+        
+        previewContainer.appendChild(iframe);
+        
+        // Carregar comentários
+        loadComments(videoId);
+        
+        openModal('previewModal');
+    }
+}
+
+function getEmbedUrl(url) {
+    if (!url) return '';
+    
+    // Converter URL do YouTube para embed
+    if (url.includes('youtube.com/watch?v=')) {
+        const videoId = url.split('v=')[1]?.split('&')[0];
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+    }
+    // Converter URL do YouTube short
+    else if (url.includes('youtu.be/')) {
+        const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+    }
+    // Se já for uma URL de embed, retornar como está
+    return url;
+}
+
+function loadComments(videoId) {
+    const commentsList = document.getElementById('commentsList');
+    const commentsCount = document.getElementById('commentsCount');
+    
+    const comments = videoComments[videoId] || [];
+    
+    // Atualizar contador
+    commentsCount.textContent = `${comments.length} comentário${comments.length !== 1 ? 's' : ''}`;
+    
+    if (comments.length === 0) {
+        commentsList.innerHTML = `
+            <div class="no-comments">
+                <i class="fas fa-comment-slash"></i>
+                <p>Nenhum comentário ainda. Seja o primeiro a comentar!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Renderizar comentários
+    commentsList.innerHTML = comments.map(comment => `
+        <div class="comment-item">
+            <div class="comment-avatar">
+                ${comment.avatar}
+            </div>
+            <div class="comment-content">
+                <div class="comment-header">
+                    <span class="comment-author">${comment.author} ${comment.isProfessor ? '<span style="color: var(--primary); font-size: 0.7rem;">(Professor)</span>' : ''}</span>
+                    <span class="comment-date">${formatDate(comment.date)}</span>
+                </div>
+                <p class="comment-text">${comment.text}</p>
+            </div>
+            ${!comment.isProfessor ? `
+            <div class="comment-actions-small">
+                <button class="btn" onclick="deleteComment(${comment.id})" title="Excluir comentário">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+function addComment() {
+    if (!currentVideoId) {
+        showWarning('Atenção', 'Nenhum vídeo selecionado.');
+        return;
+    }
+    
+    const commentInput = document.getElementById('newComment');
+    const commentText = commentInput.value.trim();
+    
+    if (!commentText) {
+        showWarning('Atenção', 'Por favor, digite um comentário.');
+        return;
+    }
+    
+    // Adicionar comentário
+    if (!videoComments[currentVideoId]) {
+        videoComments[currentVideoId] = [];
+    }
+    
+    const newComment = {
+        id: Date.now(),
+        author: "Professor", // Em um sistema real, pegaria do usuário logado
+        text: commentText,
+        date: new Date().toISOString(),
+        avatar: "P",
+        isProfessor: true
+    };
+    
+    videoComments[currentVideoId].push(newComment);
+    
+    // Recarregar comentários
+    loadComments(currentVideoId);
+    
+    // Limpar campo de comentário
+    commentInput.value = '';
+    
+    // Mostrar feedback
+    showNotification('Comentário adicionado com sucesso!', 'success');
+}
+
+function deleteComment(commentId) {
+    if (!currentVideoId) return;
+    
+    confirmDelete('comentário').then((result) => {
+        if (result.isConfirmed) {
+            const comments = videoComments[currentVideoId];
+            if (comments) {
+                // Encontrar o índice do comentário
+                const commentIndex = comments.findIndex(comment => comment.id === commentId);
+                
+                if (commentIndex !== -1) {
+                    // Remover comentário
+                    comments.splice(commentIndex, 1);
+                    
+                    // Recarregar comentários
+                    loadComments(currentVideoId);
+                    
+                    // Mostrar feedback
+                    showToast('success', 'Comentário excluído com sucesso!');
+                }
+            }
+        }
+    });
+}
+
+function clearComment() {
+    document.getElementById('newComment').value = '';
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR') + ' às ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function showNotification(message, type) {
+    // Usar SweetAlert2 Toast
+    showToast(type === 'success' ? 'success' : 'info', message);
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'block') {
+                closeModal(modal.id);
+            }
+        });
+    }
+}
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'block') {
+                closeModal(modal.id);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

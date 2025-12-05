@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Envio - {{ submission.task.title }}{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <header class="page-header">
+            <a href="{{ url_for('student_tasks') }}" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar para Tarefas
+            </a>
+        </header>
+        
+        <div class="submission-container">
+            <!-- Status do Envio -->
+            <section class="status-card">
+                <div class="status-header">
+                    <div class="status-icon {% if submission.grade is not none %}graded{% else %}pending{% endif %}">
+                        <i class="fas {% if submission.grade is not none %}fa-check-circle{% else %}fa-hourglass-half{% endif %}"></i>
+                    </div>
+                    <div class="status-info">
+                        <h1>{{ submission.task.title }}</h1>
+                        <p class="status-text">
+                            {% if submission.grade is not none %}
+                            Corrigido em {{ submission.graded_at.strftime('%d/%m/%Y às %H:%M') if submission.graded_at else 'N/A' }}
+                            {% else %}
+                            Aguardando correção do professor
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                {% if submission.grade is not none %}
+                <div class="grade-display-wrapper">
+                    <div class="grade-display {% if submission.grade >= 7 %}good{% elif submission.grade >= 5 %}average{% else %}low{% endif %}">
+                        <span class="grade-label">Sua Nota</span>
+                        <span class="grade-value">{{ "%.1f"|format(submission.grade) }}</span>
+                        {% if submission.task.max_grade %}
+                        <span class="grade-max">de {{ submission.task.max_grade }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+            
+            <div class="details-grid">
+                <!-- Detalhes da Tarefa -->
+                <section class="task-card">
+                    <h2><i class="fas fa-tasks"></i> Sobre a Tarefa</h2>
+                    
+                    <div class="task-details">
+                        <div class="detail-row">
+                            <span class="label"><i class="fas fa-calendar-alt"></i> Prazo:</span>
+                            <span class="value">{{ submission.task.due_date.strftime('%d/%m/%Y às %H:%M') }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label"><i class="fas fa-clock"></i> Enviado em:</span>
+                            <span class="value">{{ submission.submitted_at.strftime('%d/%m/%Y às %H:%M') }}</span>
+                        </div>
+                        {% if submission.task.max_grade %}
+                        <div class="detail-row">
+                            <span class="label"><i class="fas fa-star"></i> Valor:</span>
+                            <span class="value">{{ submission.task.max_grade }} pontos</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-row">
+                            <span class="label"><i class="fas fa-info-circle"></i> Status de Envio:</span>
+                            <span class="value {% if submission.is_late %}late{% endif %}">
+                                {% if submission.is_late %}
+                                <i class="fas fa-exclamation-triangle"></i> Entregue com atraso
+                                {% else %}
+                                <i class="fas fa-check"></i> Entregue no prazo
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {% if submission.task.description %}
+                    <div class="task-description">
+                        <h3>Descrição da Tarefa</h3>
+                        <p>{{ submission.task.description }}</p>
+                    </div>
+                    {% endif %}
+                </section>
+                
+                <!-- Seu Envio -->
+                <section class="submission-card">
+                    <h2><i class="fas fa-file-alt"></i> Seu Envio</h2>
+                    
+                    {% if submission.content %}
+                    <div class="submission-content">
+                        <h3>Resposta</h3>
+                        <div class="content-box">
+                            {{ submission.content }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if submission.file_path %}
+                    <div class="submission-file">
+                        <h3>Arquivo Enviado</h3>
+                        <a href="{{ url_for('student_download_submission', submission_id=submission.id) }}" class="file-download">
+                            <i class="fas fa-file"></i>
+                            <span>{{ submission.file_path.split('/')[-1] }}</span>
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if not submission.content and not submission.file_path %}
+                    <div class="no-content">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Nenhum conteúdo ou arquivo foi enviado.</p>
+                    </div>
+                    {% endif %}
+                </section>
+            </div>
+            
+            <!-- Feedback do Professor -->
+            {% if submission.feedback %}
+            <section class="feedback-card">
+                <h2><i class="fas fa-comment-dots"></i> Feedback do Professor</h2>
+                <div class="feedback-content">
+                    {{ submission.feedback }}
+                </div>
+            </section>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<style>
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f5f7fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    padding: 30px;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-content {
+    margin-left: 70px;
+}
+
+.page-header {
+    margin-bottom: 25px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #666;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.3s;
+}
+
+.back-link:hover {
+    color: #4facfe;
+}
+
+.submission-container {
+    max-width: 1000px;
+}
+
+/* Status Card */
+.status-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    margin-bottom: 25px;
+}
+
+.status-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.status-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}
+
+.status-icon.graded {
+    background: #e8f5e9;
+    color: #27ae60;
+}
+
+.status-icon.pending {
+    background: #fff8e1;
+    color: #f5a623;
+}
+
+.status-info h1 {
+    font-size: 1.5rem;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+}
+
+.status-text {
+    color: #666;
+    margin: 0;
+}
+
+.grade-display-wrapper {
+    margin-top: 25px;
+    padding-top: 25px;
+    border-top: 1px solid #e0e6ed;
+}
+
+.grade-display {
+    display: inline-block;
+    padding: 20px 35px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.grade-display.good { background: #e8f5e9; }
+.grade-display.average { background: #fff8e1; }
+.grade-display.low { background: #ffebee; }
+
+.grade-label {
+    display: block;
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.grade-display .grade-value {
+    display: block;
+    font-size: 2.8rem;
+    font-weight: 700;
+}
+
+.grade-display.good .grade-value { color: #27ae60; }
+.grade-display.average .grade-value { color: #f39c12; }
+.grade-display.low .grade-value { color: #e74c3c; }
+
+.grade-max {
+    font-size: 0.9rem;
+    color: #999;
+}
+
+/* Details Grid */
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.task-card, .submission-card, .feedback-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.task-card h2, .submission-card h2, .feedback-card h2 {
+    font-size: 1.1rem;
+    color: #1a1a2e;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.task-card h2 i { color: #4facfe; }
+.submission-card h2 i { color: #43e97b; }
+.feedback-card h2 i { color: #667eea; }
+
+/* Task Details */
+.task-details {
+    margin-bottom: 20px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row .label {
+    color: #666;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.detail-row .label i {
+    color: #4facfe;
+    width: 16px;
+}
+
+.detail-row .value {
+    font-weight: 500;
+    color: #1a1a2e;
+}
+
+.detail-row .value.late {
+    color: #ff6b6b;
+}
+
+.task-description h3, .submission-content h3, .submission-file h3 {
+    font-size: 0.95rem;
+    color: #1a1a2e;
+    margin: 0 0 12px 0;
+}
+
+.task-description p {
+    color: #666;
+    line-height: 1.7;
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* Submission Content */
+.submission-content {
+    margin-bottom: 20px;
+}
+
+.content-box {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    color: #444;
+    line-height: 1.7;
+    white-space: pre-wrap;
+}
+
+.submission-file {
+    margin-top: 20px;
+}
+
+.file-download {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #1a1a2e;
+    transition: background 0.3s;
+}
+
+.file-download:hover {
+    background: #e8f0fe;
+}
+
+.file-download span {
+    flex: 1;
+    font-weight: 500;
+}
+
+.file-download i:first-child {
+    color: #4facfe;
+    font-size: 1.2rem;
+}
+
+.file-download i:last-child {
+    color: #666;
+}
+
+.no-content {
+    text-align: center;
+    padding: 30px;
+    color: #999;
+}
+
+.no-content i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+/* Feedback Card */
+.feedback-card {
+    border-left: 4px solid #667eea;
+}
+
+.feedback-content {
+    padding: 20px;
+    background: #f0f4ff;
+    border-radius: 12px;
+    color: #444;
+    line-height: 1.7;
+    white-space: pre-wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+    
+    .status-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        gap: 5px;
+    }
+}
+</style>
+{% endblock %}

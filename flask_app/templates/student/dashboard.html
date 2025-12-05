@@ -1,0 +1,750 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Mancera{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'student/_sidebar.html' %}
+    
+    <main class="main-content">
+        <div class="content-section">
+            <!-- Header -->
+            <div class="section-header">
+                <div>
+                    <h1>Dashboard</h1>
+                    <p class="welcome-text">Bem-vindo(a), <strong>{{ current_user.name }}</strong>!</p>
+                </div>
+                <div class="header-actions">
+                    <a href="{{ url_for('notifications') }}" class="notification-btn">
+                        <i class="fas fa-bell"></i>
+                        {% if notifications_count > 0 %}
+                        <span class="notification-badge">{{ notifications_count }}</span>
+                        {% endif %}
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Estatisticas -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Videoaulas</h3>
+                    <div class="stat-value">{{ stats.total_videos }}</div>
+                    <p class="stat-description">Disponíveis para você</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Materiais</h3>
+                    <div class="stat-value">{{ stats.total_materials }}</div>
+                    <p class="stat-description">De estudo</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Tarefas Pendentes</h3>
+                    <div class="stat-value">{{ stats.pending_tasks }}</div>
+                    <p class="stat-description">Para entregar</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Média Geral</h3>
+                    <div class="stat-value">{{ "%.0f"|format(stats.average_grade) if stats.average_grade else "N/A" }}%</div>
+                    <p class="stat-description">Desempenho normalizado</p>
+                </div>
+            </div>
+            
+            <!-- Status da Assinatura -->
+            <div class="subscription-card {% if current_user.is_expired() %}expired{% else %}active{% endif %}">
+                <div class="subscription-icon">
+                    <i class="fas {% if current_user.is_expired() %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %}"></i>
+                </div>
+                <div class="subscription-info">
+                    <h3>Status da Assinatura</h3>
+                    {% if current_user.is_expired() %}
+                    <p class="status expired">Sua assinatura expirou em {{ current_user.subscription_end.strftime('%d/%m/%Y') }}</p>
+                    <p class="action-text">Entre em contato com o professor para renovar.</p>
+                    {% else %}
+                    <p class="status active">Assinatura ativa até {{ current_user.subscription_end.strftime('%d/%m/%Y') if current_user.subscription_end else 'Indefinido' }}</p>
+                    {% set days_left = (current_user.subscription_end - now).days if current_user.subscription_end else 0 %}
+                    {% if days_left <= 7 and days_left > 0 %}
+                    <p class="warning-text"><i class="fas fa-clock"></i> Apenas {{ days_left }} dias restantes!</p>
+                    {% endif %}
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('student_chat') }}" class="btn btn-primary">
+                    <i class="fas fa-comments"></i> Falar com Professor
+                </a>
+            </div>
+            
+            <!-- Grid de Cards -->
+            <div class="dashboard-grid">
+                <!-- Tarefas Pendentes -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-clock"></i> Tarefas Pendentes</h2>
+                        <a href="{{ url_for('student_tasks') }}" class="view-all">Ver todas <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="card-content">
+                        {% if pending_tasks %}
+                        <ul class="item-list">
+                            {% for task in pending_tasks[:5] %}
+                            <li class="item {% if task.is_past_due() %}overdue{% endif %}">
+                                <div class="item-info">
+                                    <h4>{{ task.title }}</h4>
+                                    <p class="item-meta {% if task.is_past_due() %}overdue{% endif %}">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        Prazo: {{ task.due_date.strftime('%d/%m/%Y às %H:%M') }}
+                                    </p>
+                                </div>
+                                <a href="{{ url_for('student_task_detail', task_id=task.id) }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-paper-plane"></i> Entregar
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="empty-state-small">
+                            <i class="fas fa-check-circle"></i>
+                            <p>Nenhuma tarefa pendente!</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Últimas Videoaulas -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-play-circle"></i> Últimas Videoaulas</h2>
+                        <a href="{{ url_for('student_videos') }}" class="view-all">Ver todas <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="card-content">
+                        {% if recent_videos %}
+                        <ul class="item-list">
+                            {% for video in recent_videos[:4] %}
+                            <li class="item">
+                                <div class="item-icon video">
+                                    <i class="fas fa-play"></i>
+                                </div>
+                                <div class="item-info">
+                                    <h4>{{ video.title }}</h4>
+                                    <p class="item-meta">
+                                        <span><i class="fas fa-folder"></i> {{ video.category or 'Sem categoria' }}</span>
+                                        <span><i class="fas fa-clock"></i> {{ video.created_at.strftime('%d/%m/%Y') }}</span>
+                                    </p>
+                                </div>
+                                <a href="{{ url_for('student_watch_video', video_id=video.id) }}" class="btn-icon-action">
+                                    <i class="fas fa-play"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="empty-state-small">
+                            <i class="fas fa-video-slash"></i>
+                            <p>Nenhuma videoaula disponível ainda.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Últimos Materiais -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-file-alt"></i> Materiais Recentes</h2>
+                        <a href="{{ url_for('student_materials') }}" class="view-all">Ver todas <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="card-content">
+                        {% if recent_materials %}
+                        <ul class="item-list">
+                            {% for material in recent_materials[:4] %}
+                            <li class="item">
+                                <div class="item-icon material">
+                                    {% if material.file_url and material.file_url.endswith('.pdf') %}
+                                    <i class="fas fa-file-pdf"></i>
+                                    {% elif material.file_url and material.file_url.endswith(('.doc', '.docx')) %}
+                                    <i class="fas fa-file-word"></i>
+                                    {% else %}
+                                    <i class="fas fa-file"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="item-info">
+                                    <h4>{{ material.title }}</h4>
+                                    <p class="item-meta">{{ material.created_at.strftime('%d/%m/%Y') }}</p>
+                                </div>
+                                <a href="{{ url_for('student_download_material', material_id=material.id) }}" class="btn-icon-action download">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="empty-state-small">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Nenhum material disponível ainda.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Últimas Notas -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-line"></i> Últimas Notas</h2>
+                        <a href="{{ url_for('student_grades') }}" class="view-all">Ver todas <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                    <div class="card-content">
+                        {% if recent_grades %}
+                        <ul class="item-list">
+                            {% for submission in recent_grades[:4] %}
+                            {% set task_type = submission.task.task_type or 'normal' %}
+                            {% set pct = submission.score_percentage %}
+                            <li class="item">
+                                <div class="item-info">
+                                    <h4>{{ submission.task.title }}</h4>
+                                    <p class="item-meta">
+                                        {{ submission.graded_at.strftime('%d/%m/%Y') if submission.graded_at else submission.submitted_at.strftime('%d/%m/%Y') }}
+                                        <span class="task-type-tag">{{ 'Redação' if task_type == 'redacao' else 'Exercício' }}</span>
+                                    </p>
+                                </div>
+                                <div class="grade-badge {% if pct >= 70 %}good{% elif pct >= 50 %}average{% else %}low{% endif %}">
+                                    {{ submission.score_display }}
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="empty-state-small">
+                            <i class="fas fa-graduation-cap"></i>
+                            <p>Nenhuma nota registrada ainda.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+/* ===== LAYOUT PRINCIPAL ===== */
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f8f9fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 280px;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.content-section {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ===== HEADER ===== */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.section-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+
+.welcome-text {
+    color: #6c757d;
+    margin: 8px 0 0 0;
+    font-size: 0.95rem;
+}
+
+.notification-btn {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    background: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 1.2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.notification-btn:hover {
+    color: #007BFF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #dc3545;
+    color: white;
+    font-size: 0.7rem;
+    padding: 4px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* ===== STATS GRID ===== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+}
+
+.stat-card:nth-child(2)::before {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+}
+
+.stat-card:nth-child(3)::before {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+}
+
+.stat-card:nth-child(4)::before {
+    background: linear-gradient(135deg, #6f42c1 0%, #59359a 100%);
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 40px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.stat-card:nth-child(1) .stat-value { color: #007BFF; }
+.stat-card:nth-child(2) .stat-value { color: #28a745; }
+.stat-card:nth-child(3) .stat-value { color: #ffc107; }
+.stat-card:nth-child(4) .stat-value { color: #6f42c1; }
+
+.stat-description {
+    font-size: 13px;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* ===== SUBSCRIPTION CARD ===== */
+.subscription-card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    margin-bottom: 24px;
+    border: 1px solid #e9ecef;
+}
+
+.subscription-card.active {
+    border-left: 4px solid #28a745;
+}
+
+.subscription-card.expired {
+    border-left: 4px solid #dc3545;
+}
+
+.subscription-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.subscription-card.active .subscription-icon {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+}
+
+.subscription-card.expired .subscription-icon {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+}
+
+.subscription-info {
+    flex: 1;
+}
+
+.subscription-info h3 {
+    margin: 0 0 6px 0;
+    font-size: 1rem;
+    color: #212529;
+    font-weight: 600;
+}
+
+.subscription-info .status {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.subscription-info .status.active { color: #28a745; }
+.subscription-info .status.expired { color: #dc3545; }
+
+.subscription-info .action-text {
+    margin: 4px 0 0 0;
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.subscription-info .warning-text {
+    margin: 6px 0 0 0;
+    color: #ffc107;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ===== BUTTONS ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-sm {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+}
+
+/* ===== DASHBOARD GRID ===== */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+}
+
+.dashboard-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8f9fa;
+}
+
+.card-header h2 {
+    font-size: 1rem;
+    color: #212529;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+
+.card-header h2 i {
+    color: #007BFF;
+}
+
+.view-all {
+    color: #007BFF;
+    font-size: 0.85rem;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    transition: gap 0.3s;
+}
+
+.view-all:hover {
+    gap: 10px;
+}
+
+.card-content {
+    padding: 16px 24px;
+}
+
+/* ===== ITEM LIST ===== */
+.item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.item:last-child {
+    border-bottom: none;
+}
+
+.item.overdue {
+    background: rgba(220, 53, 69, 0.05);
+    margin: 0 -24px;
+    padding: 14px 24px;
+}
+
+.item-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.item-icon.video {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+}
+
+.item-icon.material {
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.item-icon .fa-file-pdf { color: #dc3545; }
+.item-icon .fa-file-word { color: #007bff; }
+
+.item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.item-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 0.9rem;
+    color: #212529;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-meta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.item-meta.overdue {
+    color: #dc3545;
+}
+
+.item-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-icon-action {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
+}
+
+.btn-icon-action.download {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.25);
+}
+
+.btn-icon-action:hover {
+    transform: scale(1.1);
+}
+
+.grade-badge {
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+}
+
+.grade-badge.good { background: #d4edda; color: #28a745; }
+.grade-badge.average { background: #fff3cd; color: #856404; }
+.grade-badge.low { background: #f8d7da; color: #dc3545; }
+
+/* ===== EMPTY STATE ===== */
+.empty-state-small {
+    text-align: center;
+    padding: 30px;
+    color: #6c757d;
+}
+
+.empty-state-small i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    opacity: 0.4;
+    color: #007BFF;
+}
+
+.empty-state-small p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 1200px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+        padding-top: 70px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    
+    .header-actions {
+        align-self: flex-end;
+        margin-top: -60px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    
+    .stat-card {
+        padding: 16px;
+    }
+    
+    .stat-value {
+        font-size: 28px;
+    }
+    
+    .subscription-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 16px;
+    }
+    
+    .subscription-card .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .card-content {
+        padding: 12px 16px;
+    }
+    
+    .item {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .item .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .section-header h1 {
+        font-size: 24px;
+    }
+    
+    .header-actions {
+        margin-top: 0;
+    }
+}
+</style>
+{% endblock %}

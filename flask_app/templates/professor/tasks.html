@@ -1,0 +1,1405 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container" data-testid="professor-dashboard">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="content-section">
+            <div class="section-header">
+                <h1>Tarefas & Reforços</h1>
+                <button class="btn btn-primary" onclick="openModal('taskModal')">
+                    <i class="fas fa-plus"></i> Criar Tarefa
+                </button>
+            </div>
+            
+            <!-- Sistema de Pesquisa -->
+            <div class="search-container">
+                <form method="GET" action="{{ url_for('professor_tasks') }}" class="search-form">
+                    <div class="search-input-group">
+                        <i class="fas fa-search search-icon"></i>
+                        <input 
+                            type="text" 
+                            name="search" 
+                            class="search-input" 
+                            placeholder="Pesquisar tarefas por título ou descrição..." 
+                            value="{{ search_query if search_query else '' }}"
+                        >
+                        {% if search_query %}
+                        <button type="button" class="clear-search-btn" onclick="clearSearch()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="btn btn-primary search-btn">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </form>
+                
+                {% if search_query %}
+                <div class="search-results-info">
+                    <span class="search-results-count">
+                        {{ total_tasks }} resultado{{ 's' if total_tasks != 1 }} encontrado{{ 's' if total_tasks != 1 }}
+                        {% if search_query %}
+                        para "<strong>{{ search_query }}</strong>"
+                        {% endif %}
+                    </span>
+                    <a href="{{ url_for('professor_tasks') }}" class="btn btn-text">
+                        <i class="fas fa-times"></i> Limpar pesquisa
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Filtros Rápidos -->
+            <div class="quick-filters">
+                <div class="filter-buttons">
+                    <a href="{{ url_for('professor_tasks') }}" class="filter-btn {% if not filter_status %}active{% endif %}">
+                        <i class="fas fa-list"></i> Todas
+                    </a>
+                    <a href="{{ url_for('professor_tasks', filter='pending') }}" class="filter-btn {% if filter_status == 'pending' %}active{% endif %}">
+                        <i class="fas fa-clock"></i> Pendentes
+                    </a>
+                    <a href="{{ url_for('professor_tasks', filter='graded') }}" class="filter-btn {% if filter_status == 'graded' %}active{% endif %}">
+                        <i class="fas fa-check-circle"></i> Corrigidas
+                    </a>
+                    <a href="{{ url_for('professor_tasks', filter='with_links') }}" class="filter-btn {% if filter_status == 'with_links' %}active{% endif %}">
+                        <i class="fas fa-link"></i> Com Links
+                    </a>
+                </div>
+            </div>
+            
+            <div class="content-grid">
+                {% for task in tasks %}
+                {% set task_submissions = submissions|selectattr('task_id', 'equalto', task.id)|list %}
+                {% set pending_count = task_submissions|selectattr('score', 'none')|list|length %}
+                {% set graded_count = task_submissions|rejectattr('score', 'none')|list|length %}
+                
+                <div class="modern-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div class="card-status-badges">
+                            {% if pending_count > 0 %}
+                            <span class="badge badge-warning">
+                                <i class="fas fa-clock"></i> {{ pending_count }} pendente{{ 's' if pending_count != 1 }}
+                            </span>
+                            {% endif %}
+                            {% if graded_count > 0 %}
+                            <span class="badge badge-success">
+                                <i class="fas fa-check"></i> {{ graded_count }} corrigida{{ 's' if graded_count != 1 }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <h3>{{ task.title }}</h3>
+                    <p class="card-meta">
+                        <i class="fas fa-calendar"></i> 
+                        Criado: {{ task.created_at.strftime('%d/%m/%Y') }}
+                        <span class="separator">•</span>
+                        <i class="fas fa-clock"></i> 
+                        Entrega: {{ task.due_date.strftime('%d/%m/%Y') }}
+                    </p>
+                    
+                    <div class="card-description-container">
+                        <p class="card-description">{{ task.description[:150] }}{% if task.description|length > 150 %}...{% endif %}</p>
+                        {% if task.description|length > 150 %}
+                        <button class="btn-text show-more-btn" onclick="toggleDescription(this)">
+                            <i class="fas fa-chevron-down"></i> Ver mais
+                        </button>
+                        <div class="full-description" style="display: none;">
+                            {{ task.description }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if task.external_link %}
+                    <div class="card-external-link">
+                        <a href="{{ task.external_link }}" target="_blank" class="link-with-icon">
+                            <i class="fas fa-external-link-alt"></i>
+                            <span class="link-text">Acessar Formulário</span>
+                        </a>
+                        {% if task.external_link_type %}
+                        <span class="link-type-badge">
+                            <i class="fas fa-{{ 'file-alt' if task.external_link_type == 'forms' else 'link' }}"></i>
+                            {{ 'Google Forms' if task.external_link_type == 'forms' else 'Link Externo' }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="card-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Tipo:</span>
+                            <span class="stat-value">{{ 'Redação' if task.task_type == 'redacao' else 'Normal' }}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Pontuação:</span>
+                            <span class="stat-value">{{ task.max_score|int if task.task_type == 'redacao' else task.max_score }} pts</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Entregas:</span>
+                            <span class="stat-value">{{ task_submissions|length }}</span>
+                        </div>
+                    </div>
+                    
+                    {% if task_submissions %}
+                    <div class="submissions-preview">
+                        <div class="submissions-header">
+                            <h4><i class="fas fa-users"></i> Últimas Entregas</h4>
+                            <a href="{{ url_for('view_task_submissions', task_id=task.id) }}" class="btn-text">
+                                Ver todas
+                            </a>
+                        </div>
+                        {% for sub in task_submissions[:3] %}
+                        <div class="submission-preview-item">
+                            <div class="student-avatar-small">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="submission-preview-info">
+                                <span class="student-name">{{ sub.student.name }}</span>
+                                <span class="submission-status">
+                                    {% if sub.score is not none %}
+                                    <i class="fas fa-check-circle text-success"></i> Nota: {{ sub.score }}
+                                    {% else %}
+                                    <i class="fas fa-clock text-warning"></i> Pendente
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="card-actions">
+                        <a href="{{ url_for('view_task_submissions', task_id=task.id) }}" class="btn btn-sm btn-outline">
+                            <i class="fas fa-eye"></i> Ver Entregas
+                        </a>
+                        <button class="btn btn-sm btn-outline" onclick="editTaskModal({{ task.id }})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <form method="POST" action="{{ url_for('delete_task', id=task.id) }}" style="display:inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger" data-confirm="Tem certeza que deseja excluir esta tarefa?">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    {% if search_query %}
+                    <i class="fas fa-search fa-3x"></i>
+                    <h3>Nenhuma tarefa encontrada</h3>
+                    <p>Não encontramos tarefas correspondentes a "{{ search_query }}"</p>
+                    <a href="{{ url_for('professor_tasks') }}" class="btn btn-primary">
+                        <i class="fas fa-times"></i> Limpar pesquisa
+                    </a>
+                    {% else %}
+                    <i class="fas fa-tasks fa-3x"></i>
+                    <h3>Nenhuma tarefa cadastrada</h3>
+                    <p>Comece criando sua primeira tarefa para os alunos</p>
+                    <button class="btn btn-primary" onclick="openModal('taskModal')">
+                        <i class="fas fa-plus"></i> Criar Primeira Tarefa
+                    </button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Paginação -->
+            {% if total_pages > 1 %}
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Mostrando tarefas {{ ((page - 1) * per_page) + 1 }} - {{ [page * per_page, total_tasks]|min }} de {{ total_tasks }}
+                </div>
+                <nav class="pagination">
+                    <ul class="pagination-list">
+                        {% if page > 1 %}
+                        <li class="pagination-item">
+                            <a href="{{ url_for('professor_tasks', page=page-1, search=search_query, filter=filter_status) }}" class="pagination-link">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p >= page - 2 and p <= page + 2 %}
+                            <li class="pagination-item {% if p == page %}active{% endif %}">
+                                <a href="{{ url_for('professor_tasks', page=p, search=search_query, filter=filter_status) }}" class="pagination-link">
+                                    {{ p }}
+                                </a>
+                            </li>
+                            {% elif p == 1 or p == total_pages %}
+                            <li class="pagination-item">
+                                <a href="{{ url_for('professor_tasks', page=p, search=search_query, filter=filter_status) }}" class="pagination-link">
+                                    {{ p }}
+                                </a>
+                            </li>
+                            {% elif p == page - 3 or p == page + 3 %}
+                            <li class="pagination-item disabled">
+                                <span class="pagination-link">...</span>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page < total_pages %}
+                        <li class="pagination-item">
+                            <a href="{{ url_for('professor_tasks', page=page+1, search=search_query, filter=filter_status) }}" class="pagination-link">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <div class="pagination-per-page">
+                    <span>Itens por página:</span>
+                    <select class="form-input-sm" onchange="changePerPage(this.value)">
+                        <option value="9" {% if per_page == 9 %}selected{% endif %}>9</option>
+                        <option value="18" {% if per_page == 18 %}selected{% endif %}>18</option>
+                        <option value="27" {% if per_page == 27 %}selected{% endif %}>27</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                    </select>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+
+<!-- Modal Nova Tarefa -->
+<div id="taskModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('taskModal')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-tasks"></i> Nova Tarefa</h2>
+            <span class="modal-close" onclick="closeModal('taskModal')">&times;</span>
+        </div>
+        
+        <form method="POST" action="{{ url_for('create_task') }}" class="modal-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-section">
+                <h3>Informações da Tarefa</h3>
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Título da Tarefa *</label>
+                    <input type="text" name="title" class="form-input" placeholder="Ex: Exercícios de Matemática - Aula 1" required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Descrição Detalhada *</label>
+                    <textarea name="description" class="form-input" rows="5" placeholder="Descreva os objetivos, instruções e requisitos da tarefa..." required></textarea>
+                    <small class="form-hint">Inclua todas as informações necessárias para os alunos entenderem a tarefa</small>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Link Externo (Opcional)</h3>
+                <div class="form-group">
+                    <label><i class="fas fa-link"></i> URL do Formulário/Link</label>
+                    <input type="url" name="external_link" class="form-input" placeholder="https://forms.gle/... ou https://drive.google.com/...">
+                    <small class="form-hint">Cole o link do Google Forms, Google Drive ou qualquer outro recurso online</small>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Tipo de Link</label>
+                    <select name="external_link_type" class="form-input">
+                        <option value="">Selecione o tipo</option>
+                        <option value="forms">Google Forms</option>
+                        <option value="drive">Google Drive</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="other">Outro</option>
+                    </select>
+                    <small class="form-hint">Ajude os alunos a identificar o tipo de recurso</small>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Configurações</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar-alt"></i> Data de Entrega *</label>
+                        <input type="date" name="due_date" class="form-input" required min="{{ now().strftime('%Y-%m-%d') }}">
+                        <small class="form-hint">Data limite para os alunos entregarem</small>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-list-alt"></i> Tipo de Atividade *</label>
+                        <select name="task_type" id="task_type" class="form-input" onchange="updateScoreRange(this)" required>
+                            <option value="normal">Atividade Normal (0-10)</option>
+                            <option value="redacao">Redação (0-1000)</option>
+                        </select>
+                        <small class="form-hint">Define a escala de pontuação</small>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-star"></i> Pontuação Máxima</label>
+                        <div class="score-input-wrapper">
+                            <input type="number" name="max_score" id="max_score_input" class="form-input" value="10" min="0" max="10" step="0.1">
+                            <span class="score-suffix" id="score_suffix">pontos</span>
+                        </div>
+                        <small class="form-hint" id="score_hint">Valor máximo que o aluno pode receber (0-10)</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('taskModal')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Criar Tarefa
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edição de Tarefa -->
+<div id="editTaskModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('editTaskModal')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-edit"></i> Editar Tarefa</h2>
+            <span class="modal-close" onclick="closeModal('editTaskModal')">&times;</span>
+        </div>
+        
+        <form method="POST" id="editTaskForm" class="modal-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="task_id" id="edit_task_id">
+            
+            <div class="form-section">
+                <h3>Informações da Tarefa</h3>
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Título da Tarefa *</label>
+                    <input type="text" name="title" id="edit_title" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Descrição Detalhada *</label>
+                    <textarea name="description" id="edit_description" class="form-input" rows="5" required></textarea>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Link Externo (Opcional)</h3>
+                <div class="form-group">
+                    <label><i class="fas fa-link"></i> URL do Formulário/Link</label>
+                    <input type="url" name="external_link" id="edit_external_link" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Tipo de Link</label>
+                    <select name="external_link_type" id="edit_external_link_type" class="form-input">
+                        <option value="">Selecione o tipo</option>
+                        <option value="forms">Google Forms</option>
+                        <option value="drive">Google Drive</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="other">Outro</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Configurações</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar-alt"></i> Data de Entrega *</label>
+                        <input type="date" name="due_date" id="edit_due_date" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-list-alt"></i> Tipo de Atividade *</label>
+                        <select name="task_type" id="edit_task_type" class="form-input" onchange="updateEditScoreRange(this)" required>
+                            <option value="normal">Atividade Normal (0-10)</option>
+                            <option value="redacao">Redação (0-1000)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-star"></i> Pontuação Máxima</label>
+                        <div class="score-input-wrapper">
+                            <input type="number" name="max_score" id="edit_max_score" class="form-input" min="0" max="10" step="0.1">
+                            <span class="score-suffix" id="edit_score_suffix">pontos</span>
+                        </div>
+                        <small class="form-hint" id="edit_score_hint">Valor máximo (0-10)</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editTaskModal')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* ===== CONTEÚDO DAS TAREFAS ===== */
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.section-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+}
+
+/* Sistema de Pesquisa */
+.search-container {
+    margin-bottom: 24px;
+}
+
+.search-form {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.search-input-group {
+    flex: 1;
+    position: relative;
+}
+
+.search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 14px 16px 14px 48px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: all 0.2s;
+    background: #f8f9fa;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #007BFF;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.clear-search-btn:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.search-btn {
+    padding: 14px 24px;
+    border-radius: 12px;
+}
+
+.search-results-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #e7f3ff;
+    border-radius: 8px;
+    border-left: 4px solid #007BFF;
+}
+
+.search-results-count {
+    color: #495057;
+    font-size: 14px;
+}
+
+/* Filtros Rápidos */
+.quick-filters {
+    margin-bottom: 24px;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 10px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    background: white;
+    color: #495057;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    border-color: #007BFF;
+    color: #007BFF;
+    background: #f8f9fa;
+}
+
+.filter-btn.active {
+    background: #007BFF;
+    border-color: #007BFF;
+    color: white;
+}
+
+/* Cards */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.modern-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.modern-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.card-icon {
+    color: #007BFF;
+    font-size: 24px;
+}
+
+.card-icon .fa-tasks {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.card-status-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.modern-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #212529;
+    line-height: 1.4;
+}
+
+.card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: #6c757d;
+    flex-wrap: wrap;
+}
+
+.separator {
+    color: #dee2e6;
+    margin: 0 4px;
+}
+
+.card-description-container {
+    margin: 16px 0;
+    flex-grow: 1;
+}
+
+.card-description {
+    color: #495057;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.full-description {
+    color: #495057;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-top: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: #007BFF;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+    text-decoration: none;
+}
+
+.btn-text:hover {
+    color: #0056B3;
+    text-decoration: underline;
+}
+
+.card-external-link {
+    margin: 12px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.link-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #28a745;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.link-with-icon:hover {
+    color: #218838;
+    text-decoration: underline;
+}
+
+.link-text {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.link-type-badge {
+    background: #e7f4ea;
+    color: #218838;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.card-stats {
+    display: flex;
+    gap: 16px;
+    margin: 16px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.stat-item {
+    flex: 1;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 11px;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.submissions-preview {
+    margin: 16px 0;
+    padding-top: 16px;
+    border-top: 1px solid #e9ecef;
+}
+
+.submissions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.submissions-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.submission-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.submission-preview-item:hover {
+    background: #f8f9fa;
+}
+
+.student-avatar-small {
+    width: 32px;
+    height: 32px;
+    background: #e9ecef;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.submission-preview-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.student-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.submission-status {
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.text-success {
+    color: #28a745 !important;
+}
+
+.text-warning {
+    color: #ffc107 !important;
+}
+
+.card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid #007BFF;
+    color: #007BFF;
+}
+
+.btn-outline:hover {
+    background: #007BFF;
+    color: white;
+}
+
+/* Paginação */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0;
+    border-top: 1px solid #e9ecef;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.pagination-info {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+}
+
+.pagination-list {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 4px;
+}
+
+.pagination-item {
+    margin: 0;
+}
+
+.pagination-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    color: #495057;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.pagination-item.active .pagination-link {
+    background: #007BFF;
+    border-color: #007BFF;
+    color: white;
+}
+
+.pagination-item:not(.active):not(.disabled) .pagination-link:hover {
+    background: #f8f9fa;
+    border-color: #007BFF;
+    color: #007BFF;
+}
+
+.pagination-item.disabled .pagination-link {
+    color: #dee2e6;
+    cursor: default;
+    border-color: #f1f3f5;
+}
+
+.pagination-per-page {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.form-input-sm {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    color: #6c757d;
+    padding: 60px 20px;
+    font-size: 16px;
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.empty-state i {
+    color: #dee2e6;
+    margin-bottom: 8px;
+}
+
+.empty-state h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #6c757d;
+    margin: 0;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 14px;
+    max-width: 400px;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .main-content {
+        padding: 16px;
+    }
+    
+    .content-section {
+        padding: 20px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    
+    .search-form {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .search-input-group {
+        width: 100%;
+    }
+    
+    .filter-buttons {
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+    
+    .filter-buttons::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .filter-buttons::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    .filter-buttons::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 2px;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .pagination-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    
+    .pagination {
+        order: 2;
+        justify-content: center;
+    }
+    
+    .pagination-info {
+        order: 1;
+        text-align: center;
+    }
+    
+    .pagination-per-page {
+        order: 3;
+        justify-content: center;
+    }
+    
+    .card-external-link {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .link-text {
+        max-width: 100%;
+    }
+}
+
+/* ===== MODAL STYLES ===== */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal-container {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.25);
+    max-width: 700px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideIn 0.3s ease-out;
+    z-index: 1001;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 30px;
+    border-bottom: 1px solid #e9ecef;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: #212529;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.modal-header h2 i {
+    color: #007BFF;
+}
+
+.modal-close {
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #6c757d;
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #dc3545;
+    background: #f8f9fa;
+}
+
+.modal-form {
+    padding: 0;
+}
+
+.modal-form .form-section {
+    padding: 24px 30px;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.modal-form .form-section:last-of-type {
+    border-bottom: none;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 20px 30px;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+    border-radius: 0 0 16px 16px;
+}
+
+@media (max-width: 768px) {
+    .modal-container {
+        width: 95%;
+        margin: 10px;
+    }
+    
+    .modal-header,
+    .modal-form .form-section,
+    .modal-footer {
+        padding: 16px 20px;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+function openModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function toggleDescription(button) {
+    const container = button.parentElement;
+    const description = container.querySelector('.card-description');
+    const fullDescription = container.querySelector('.full-description');
+    const icon = button.querySelector('i');
+    
+    if (fullDescription.style.display === 'none') {
+        fullDescription.style.display = 'block';
+        description.style.display = 'none';
+        icon.className = 'fas fa-chevron-up';
+        button.innerHTML = '<i class="fas fa-chevron-up"></i> Ver menos';
+    } else {
+        fullDescription.style.display = 'none';
+        description.style.display = 'block';
+        icon.className = 'fas fa-chevron-down';
+        button.innerHTML = '<i class="fas fa-chevron-down"></i> Ver mais';
+    }
+}
+
+function clearSearch() {
+    window.location.href = "{{ url_for('professor_tasks') }}";
+}
+
+function changePerPage(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1'); // Voltar para primeira página
+    window.location.href = url.toString();
+}
+
+function updateScoreRange(select) {
+    const maxScoreInput = document.getElementById('max_score_input');
+    const scoreHint = document.getElementById('score_hint');
+    
+    if (select.value === 'redacao') {
+        maxScoreInput.max = 1000;
+        maxScoreInput.value = 1000;
+        maxScoreInput.step = 1;
+        scoreHint.textContent = 'Valor máximo que o aluno pode receber (0-1000)';
+    } else {
+        maxScoreInput.max = 10;
+        maxScoreInput.value = 10;
+        maxScoreInput.step = 0.1;
+        scoreHint.textContent = 'Valor máximo que o aluno pode receber (0-10)';
+    }
+}
+
+function updateEditScoreRange(select) {
+    const maxScoreInput = document.getElementById('edit_max_score');
+    const scoreHint = document.getElementById('edit_score_hint');
+    
+    if (select.value === 'redacao') {
+        maxScoreInput.max = 1000;
+        if (parseFloat(maxScoreInput.value) <= 10) {
+            maxScoreInput.value = 1000;
+        }
+        maxScoreInput.step = 1;
+        scoreHint.textContent = 'Valor máximo (0-1000)';
+    } else {
+        maxScoreInput.max = 10;
+        if (parseFloat(maxScoreInput.value) > 10) {
+            maxScoreInput.value = 10;
+        }
+        maxScoreInput.step = 0.1;
+        scoreHint.textContent = 'Valor máximo (0-10)';
+    }
+}
+
+function editTaskModal(taskId) {
+    // Implemente a lógica para buscar os dados da tarefa via AJAX
+    fetch(`/api/tasks/${taskId}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('edit_task_id').value = data.id;
+            document.getElementById('edit_title').value = data.title;
+            document.getElementById('edit_description').value = data.description;
+            document.getElementById('edit_external_link').value = data.external_link || '';
+            document.getElementById('edit_external_link_type').value = data.external_link_type || '';
+            document.getElementById('edit_due_date').value = data.due_date.split(' ')[0];
+            document.getElementById('edit_max_score').value = data.max_score;
+            document.getElementById('edit_task_type').value = data.task_type || 'normal';
+            
+            // Atualizar range de pontuação baseado no tipo
+            updateEditScoreRange(document.getElementById('edit_task_type'));
+            document.getElementById('edit_max_score').value = data.max_score;
+            
+            document.getElementById('editTaskForm').action = `/professor/tasks/${taskId}/edit`;
+            openModal('editTaskModal');
+        })
+        .catch(error => {
+            console.error('Erro ao carregar tarefa:', error);
+            showError('Erro', 'Erro ao carregar dados da tarefa');
+        });
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'flex') {
+                closeModal(modal.id);
+            }
+        });
+    }
+}
+
+// Configuração de data mínima
+document.addEventListener('DOMContentLoaded', function() {
+    // Set minimum date for due date to today
+    const dueDateInput = document.querySelector('input[name="due_date"]');
+    if (dueDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dueDateInput.min = today;
+    }
+    
+    // Re-configurar botões de confirmação (usa SweetAlert2 do base.html)
+    if (typeof setupConfirmButtons === 'function') {
+        setupConfirmButtons();
+    }
+});
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'flex') {
+                closeModal(modal.id);
+            }
+        });
+    }
+});
+
+// Auto-focus no campo de pesquisa quando há query
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.querySelector('.search-input');
+    if (searchInput && searchInput.value) {
+        searchInput.focus();
+        searchInput.select();
+    }
+});
+
+// Pesquisa em tempo real (opcional)
+let searchTimeout;
+const searchInput = document.querySelector('.search-input');
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            // Pode implementar pesquisa em tempo real aqui
+        }, 300);
+    });
+}
+</script>
+{% endblock %}

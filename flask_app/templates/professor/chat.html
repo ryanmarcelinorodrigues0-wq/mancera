@@ -1,0 +1,754 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="chat-page">
+            <div class="chat-layout">
+                <!-- Lista de Conversas -->
+                <aside class="conversations-sidebar">
+                    <div class="sidebar-header">
+                        <h2>Mensagens</h2>
+                        <span class="badge">{{ conversations|length }}</span>
+                    </div>
+                    
+                    <div class="search-wrapper">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input type="text" id="searchConversations" placeholder="Buscar aluno...">
+                    </div>
+                    
+                    <div class="conversations-list">
+                        {% if conversations %}
+                            {% for conv in conversations %}
+                            <a href="{{ url_for('professor_chat', student_id=conv.user.id) }}" 
+                               class="conversation-item {% if selected_student and selected_student.id == conv.user.id %}active{% endif %}"
+                               data-name="{{ conv.user.name|lower }}">
+                                <div class="avatar">{{ conv.user.name[:2]|upper }}</div>
+                                <div class="conv-content">
+                                    <div class="conv-header">
+                                        <span class="conv-name">{{ conv.user.name }}</span>
+                                        {% if conv.last_message %}
+                                        <span class="conv-time">{{ (conv.last_message.created_at - timedelta(hours=3)).strftime('%H:%M') }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="conv-preview">
+                                        {% if conv.last_message %}
+                                            {{ conv.last_message.content[:30] }}{% if conv.last_message.content|length > 30 %}...{% endif %}
+                                        {% else %}
+                                            <em>Sem mensagens</em>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                {% if conv.unread_count > 0 %}
+                                <span class="unread-count">{{ conv.unread_count }}</span>
+                                {% endif %}
+                            </a>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-list">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                <p>Nenhuma conversa</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </aside>
+                
+                <!-- Área do Chat -->
+                <section class="chat-section">
+                    {% if selected_student %}
+                    <!-- Header -->
+                    <header class="chat-header">
+                        <div class="student-info">
+                            <div class="avatar-lg">{{ selected_student.name[:2]|upper }}</div>
+                            <div>
+                                <h3>{{ selected_student.name }}</h3>
+                                <span class="status">Aluno</span>
+                            </div>
+                        </div>
+                    </header>
+                    
+                    <!-- Mensagens -->
+                    <div class="messages-area" id="messagesArea">
+                        {% if messages %}
+                            {% set ns = namespace(prev_date='') %}
+                            {% for msg in messages %}
+                                {% set msg_date = (msg.created_at - timedelta(hours=3)).strftime('%d/%m/%Y') %}
+                                {% set msg_time = (msg.created_at - timedelta(hours=3)).strftime('%H:%M') %}
+                                {% set today = (now - timedelta(hours=3)).strftime('%d/%m/%Y') %}
+                                {% set yesterday = (now - timedelta(hours=3) - timedelta(days=1)).strftime('%d/%m/%Y') %}
+                                
+                                {% if msg_date != ns.prev_date %}
+                                <div class="date-divider">
+                                    <span>
+                                        {% if msg_date == today %}Hoje
+                                        {% elif msg_date == yesterday %}Ontem
+                                        {% else %}{{ msg_date }}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% set ns.prev_date = msg_date %}
+                                {% endif %}
+                                
+                                <div class="message {% if msg.from_user_id == current_user.id %}sent{% else %}received{% endif %}">
+                                    <div class="message-bubble">
+                                        <p class="message-text"></p>
+                                        <span class="message-time">{{ msg_time }}</span>
+                                    </div>
+                                    <script>
+                                        (function() {
+                                            const text = {{ msg.content|tojson }};
+                                            const maxChars = 50;
+                                            let result = '';
+                                            let line = '';
+                                            const words = text.split(' ');
+                                            for (let word of words) {
+                                                if (word.length > maxChars) {
+                                                    if (line) { result += line.trim() + '\n'; line = ''; }
+                                                    for (let i = 0; i < word.length; i += maxChars) {
+                                                        result += word.slice(i, i + maxChars) + '\n';
+                                                    }
+                                                } else if ((line + word).length > maxChars) {
+                                                    result += line.trim() + '\n';
+                                                    line = word + ' ';
+                                                } else {
+                                                    line += word + ' ';
+                                                }
+                                            }
+                                            if (line.trim()) result += line.trim();
+                                            const els = document.querySelectorAll('.message-text');
+                                            const last = els[els.length - 1];
+                                            if (last && !last.textContent) last.textContent = result.trim();
+                                        })();
+                                    </script>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="no-messages">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                <h4>Inicie uma conversa</h4>
+                                <p>Envie uma mensagem para {{ selected_student.name }}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Input -->
+                    <form method="POST" action="{{ url_for('send_message') }}" class="message-form" id="messageForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="to_user_id" value="{{ selected_student.id }}">
+                        
+                        <div class="input-container">
+                            <textarea 
+                                name="content" 
+                                id="messageInput"
+                                placeholder="Digite sua mensagem..." 
+                                rows="1"
+                                required
+                                maxlength="2000"
+                            ></textarea>
+                            <span class="char-count" id="charCount">0/2000</span>
+                        </div>
+                        
+                        <button type="submit" class="send-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13"></path>
+                                <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+                            </svg>
+                        </button>
+                    </form>
+                    
+                    {% else %}
+                    <!-- Estado vazio -->
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <h2>Suas mensagens</h2>
+                        <p>Selecione uma conversa para visualizar</p>
+                    </div>
+                    {% endif %}
+                </section>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+/* Layout da página de chat */
+.chat-page {
+    background: #f8f9fa;
+    min-height: calc(100vh - 40px);
+    padding: 20px;
+}
+
+.chat-layout {
+    display: flex;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    height: calc(100vh - 80px);
+    overflow: hidden;
+}
+
+/* Sidebar de Conversas */
+.conversations-sidebar {
+    width: 280px;
+    border-right: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.sidebar-header .badge {
+    background: #007BFF;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.search-wrapper {
+    padding: 12px 16px;
+    position: relative;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.search-icon {
+    position: absolute;
+    left: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: #6c757d;
+}
+
+.search-wrapper input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #495057;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-wrapper input:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.search-wrapper input::placeholder {
+    color: #adb5bd;
+}
+
+.conversations-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.conversation-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: background 0.2s;
+    margin-bottom: 4px;
+}
+
+.conversation-item:hover {
+    background: #f8f9fa;
+}
+
+.conversation-item.active {
+    background: #e7f1ff;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.conv-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.conv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.conv-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conv-time {
+    font-size: 11px;
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.conv-preview {
+    font-size: 13px;
+    color: #6c757d;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conv-preview em {
+    color: #adb5bd;
+}
+
+.unread-count {
+    background: #007BFF;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.empty-list {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.empty-list svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.empty-list p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Área do Chat */
+.chat-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.chat-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.student-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar-lg {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.student-info h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    margin: 0 0 2px 0;
+}
+
+.student-info .status {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* Área de Mensagens */
+.messages-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #f8f9fa;
+}
+
+/* Separador de Data */
+.date-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 16px 0;
+}
+
+.date-divider span {
+    background: white;
+    color: #6c757d;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Mensagens */
+.message {
+    display: flex;
+    max-width: 70%;
+}
+
+.message.sent {
+    align-self: flex-end;
+}
+
+.message.received {
+    align-self: flex-start;
+}
+
+.message-bubble {
+    padding: 10px 14px;
+    border-radius: 16px;
+    position: relative;
+}
+
+.message.sent .message-bubble {
+    background: #007BFF;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message.received .message-bubble {
+    background: white;
+    color: #212529;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.message-text {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+}
+
+.message-time {
+    display: block;
+    font-size: 10px;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.message.sent .message-time {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.message.received .message-time {
+    color: #6c757d;
+}
+
+/* Estado vazio de mensagens */
+.no-messages {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6c757d;
+}
+
+.no-messages svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.no-messages h4 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 8px 0;
+}
+
+.no-messages p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Form de Mensagem */
+.message-form {
+    padding: 16px 24px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    background: white;
+}
+
+.input-container {
+    flex: 1;
+    position: relative;
+}
+
+.input-container textarea {
+    width: 100%;
+    padding: 12px 16px;
+    padding-right: 70px;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    font-size: 14px;
+    color: #495057;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-container textarea:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.input-container textarea::placeholder {
+    color: #adb5bd;
+}
+
+.char-count {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    font-size: 11px;
+    color: #adb5bd;
+}
+
+.send-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: none;
+    background: #007BFF;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.1s;
+    flex-shrink: 0;
+}
+
+.send-btn:hover {
+    background: #0056B3;
+}
+
+.send-btn:active {
+    transform: scale(0.95);
+}
+
+.send-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Estado vazio - sem conversa selecionada */
+.empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6c757d;
+    background: #f8f9fa;
+}
+
+.empty-state svg {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    opacity: 0.2;
+}
+
+.empty-state h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 8px 0;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 15px;
+}
+
+/* Scrollbar */
+.conversations-list::-webkit-scrollbar,
+.messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.conversations-list::-webkit-scrollbar-track,
+.messages-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.conversations-list::-webkit-scrollbar-thumb,
+.messages-area::-webkit-scrollbar-thumb {
+    background: #dee2e6;
+    border-radius: 3px;
+}
+
+.conversations-list::-webkit-scrollbar-thumb:hover,
+.messages-area::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+
+/* Responsivo */
+@media (max-width: 992px) {
+    .conversations-sidebar {
+        width: 240px;
+    }
+}
+
+@media (max-width: 768px) {
+    .chat-layout {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 80px);
+    }
+    
+    .conversations-sidebar {
+        width: 100%;
+        max-height: 200px;
+        border-right: none;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .chat-section {
+        min-height: 400px;
+    }
+    
+    .message {
+        max-width: 85%;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-scroll para última mensagem
+    const messagesArea = document.getElementById('messagesArea');
+    if (messagesArea) {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+    
+    // Textarea auto-resize e contador
+    const textarea = document.getElementById('messageInput');
+    const charCount = document.getElementById('charCount');
+    
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            
+            const count = this.value.length;
+            charCount.textContent = count + '/2000';
+            
+            if (count > 1800) {
+                charCount.style.color = '#dc3545';
+            } else if (count > 1500) {
+                charCount.style.color = '#ffc107';
+            } else {
+                charCount.style.color = '#adb5bd';
+            }
+        });
+        
+        // Enter para enviar, Shift+Enter para nova linha
+        textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (this.value.trim()) {
+                    document.getElementById('messageForm').submit();
+                }
+            }
+        });
+        
+        textarea.focus();
+    }
+    
+    // Busca de conversas
+    const searchInput = document.getElementById('searchConversations');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                const name = item.dataset.name;
+                item.style.display = name.includes(query) ? 'flex' : 'none';
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

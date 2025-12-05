@@ -1,0 +1,1716 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-container" data-testid="professor-dashboard">
+    {% include 'professor/_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="content-section">
+            <div class="section-header">
+                <h1>Gestão de Alunos</h1>
+                <button class="btn btn-primary" onclick="openModal('studentModal')">
+                    <i class="fas fa-plus"></i> Cadastrar Aluno
+                </button>
+            </div>
+
+            <!-- Barra de Ferramentas -->
+            <div class="tools-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Pesquisar alunos por nome ou email..." onkeyup="filterStudents()">
+                    <button class="search-clear" onclick="clearSearch()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="filters">
+                    <select id="statusFilter" onchange="filterStudents()" class="filter-select">
+                        <option value="all">Todos os status</option>
+                        <option value="active">Ativos</option>
+                        <option value="inactive">Inativos</option>
+                        <option value="expired">Expirados</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button class="btn btn-icon {% if view_mode != 'list' %}active{% endif %}" onclick="setViewMode('cards')" title="Visualização em Cards">
+                            <i class="fas fa-th"></i>
+                        </button>
+                        <button class="btn btn-icon {% if view_mode == 'list' %}active{% endif %}" onclick="setViewMode('list')" title="Visualização em Lista">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contadores -->
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-icon primary">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number">{{ students|length }}</div>
+                        <div class="stat-label">Total de Alunos</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number">{{ students|selectattr('is_active')|list|length }}</div>
+                        <div class="stat-label">Alunos Ativos</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning">
+                        <i class="fas fa-pause-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number">{{ students|rejectattr('is_active')|list|length }}</div>
+                        <div class="stat-label">Alunos Inativos</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number">{{ stats.expired }}</div>
+                        <div class="stat-label">Assinaturas Expiradas</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Conteúdo dos Alunos -->
+            <div id="studentsContainer">
+                {% if students %}
+                    <!-- Visualização em Cards -->
+                    <div class="content-grid {% if view_mode == 'list' %}hidden{% endif %}" id="cardsView">
+                        {% for student in paginated_students %}
+                        {% set is_expired = student.subscription_end_date and student.subscription_end_date < now() %}
+                        <div class="modern-card student-card" data-student-id="{{ student.id }}" data-status="{% if is_expired %}expired{% elif student.is_active %}active{% else %}inactive{% endif %}">
+                            <div class="card-header">
+                                <div class="student-avatar">
+                                    {{ student.name[:2]|upper }}
+                                </div>
+                                <div class="card-badge">
+                                    {% if is_expired %}
+                                        <span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> Expirado</span>
+                                    {% elif student.is_active %}
+                                        <span class="badge badge-success"><i class="fas fa-check-circle"></i> Ativo</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary"><i class="fas fa-pause-circle"></i> Inativo</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="card-body">
+                                <h3>{{ student.name }}</h3>
+                                <p class="card-category">{{ student.email }}</p>
+                                
+                                <div class="student-info">
+                                    <div class="info-item">
+                                        <i class="fas fa-phone"></i>
+                                        <span>{{ student.phone or 'Não informado' }}</span>
+                                    </div>
+                                    {% if student.birth_date %}
+                                    <div class="info-item">
+                                        <i class="fas fa-birthday-cake"></i>
+                                        <span>
+                                            {% if student.birth_date is string %}
+                                                {{ student.birth_date }}
+                                            {% else %}
+                                                {{ student.birth_date.strftime('%d/%m/%Y') }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                    {% if student.subscription_end_date %}
+                                    <div class="info-item">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        <span class="{% if is_expired %}expired{% endif %}">
+                                            {% if student.subscription_end_date is string %}
+                                                {{ student.subscription_end_date }}
+                                            {% else %}
+                                                {{ student.subscription_end_date.strftime('%d/%m/%Y') }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="card-actions">
+                                <form method="POST" action="{{ url_for('toggle_student_active', id=student.id) }}" style="display:inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm {% if student.is_active %}btn-warning{% else %}btn-success{% endif %}" data-confirm="{% if student.is_active %}Desativar{% else %}Ativar{% endif %} este aluno?">
+                                        <i class="fas {% if student.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                        {% if student.is_active %}Desativar{% else %}Ativar{% endif %}
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('delete_student', id=student.id) }}" style="display:inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.">
+                                        <i class="fas fa-trash"></i> Excluir
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Visualização em Lista -->
+                    <div class="students-table {% if view_mode != 'list' %}hidden{% endif %}" id="listView">
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Aluno</th>
+                                        <th>Contato</th>
+                                        <th>Status</th>
+                                        <th>Validade</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in paginated_students %}
+                                    {% set is_expired = student.subscription_end_date and student.subscription_end_date < now() %}
+                                    <tr data-student-id="{{ student.id }}" data-status="{% if is_expired %}expired{% elif student.is_active %}active{% else %}inactive{% endif %}">
+                                        <td>
+                                            <div class="student-info-compact">
+                                                <div class="user-avatar small">{{ student.name[:2]|upper }}</div>
+                                                <div>
+                                                    <div class="student-name">{{ student.name }}</div>
+                                                    <div class="student-email">{{ student.email }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="contact-info">
+                                                {% if student.phone %}
+                                                <div><i class="fas fa-phone"></i> {{ student.phone }}</div>
+                                                {% endif %}
+                                                {% if student.birth_date %}
+                                                <div><i class="fas fa-birthday-cake"></i> 
+                                                    {% if student.birth_date is string %}
+                                                        {{ student.birth_date }}
+                                                    {% else %}
+                                                        {{ student.birth_date.strftime('%d/%m/%Y') }}
+                                                    {% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if is_expired %}
+                                                <span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> Expirado</span>
+                                            {% elif student.is_active %}
+                                                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Ativo</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary"><i class="fas fa-pause-circle"></i> Inativo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if student.subscription_end_date %}
+                                                <span class="{% if is_expired %}expired{% endif %}">
+                                                    {% if student.subscription_end_date is string %}
+                                                        {{ student.subscription_end_date }}
+                                                    {% else %}
+                                                        {{ student.subscription_end_date.strftime('%d/%m/%Y') }}
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">Ilimitada</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="table-actions">
+                                                <form method="POST" action="{{ url_for('toggle_student_active', id=student.id) }}" style="display:inline">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-sm {% if student.is_active %}btn-warning{% else %}btn-success{% endif %}" data-confirm="{% if student.is_active %}Desativar{% else %}Ativar{% endif %} este aluno?" title="{% if student.is_active %}Desativar{% else %}Ativar{% endif %}">
+                                                        <i class="fas {% if student.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                                    </button>
+                                                </form>
+                                                <form method="POST" action="{{ url_for('delete_student', id=student.id) }}" style="display:inline">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-sm btn-danger" data-confirm="Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita." title="Excluir">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Paginação -->
+                    {% if pagination.pages > 1 %}
+                    <div class="pagination-wrapper">
+                        <div class="pagination-info">
+                            Mostrando {{ ((pagination.page - 1) * pagination.per_page) + 1 }} - {{ [pagination.page * pagination.per_page, pagination.total]|min }} de {{ pagination.total }} alunos
+                        </div>
+                        <div class="pagination">
+                            {% if pagination.has_prev %}
+                            <a href="{{ url_for('professor_students', page=pagination.prev_num, view_mode=view_mode) }}" class="pagination-btn">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                            {% endif %}
+
+                            {% for page_num in pagination.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+                                {% if page_num %}
+                                    {% if page_num != pagination.page %}
+                                    <a href="{{ url_for('professor_students', page=page_num, view_mode=view_mode) }}" class="pagination-btn">{{ page_num }}</a>
+                                    {% else %}
+                                    <span class="pagination-btn active">{{ page_num }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="pagination-ellipsis">...</span>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if pagination.has_next %}
+                            <a href="{{ url_for('professor_students', page=pagination.next_num, view_mode=view_mode) }}" class="pagination-btn">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% else %}
+                <!-- Empty State -->
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Nenhum aluno cadastrado</h3>
+                    <p>Comece cadastrando seu primeiro aluno</p>
+                    <button class="btn btn-primary" onclick="openModal('studentModal')">
+                        <i class="fas fa-plus"></i> Cadastrar Primeiro Aluno
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal Student -->
+<div id="studentModal" class="modal">
+    <div class="modal-overlay" onclick="closeModal('studentModal')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-user-plus"></i> Cadastrar Novo Aluno</h2>
+            <span class="modal-close" onclick="closeModal('studentModal')">&times;</span>
+        </div>
+        
+        <form method="POST" action="{{ url_for('create_student') }}" class="modal-form" id="studentForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-body">
+                <div id="emailError" class="alert alert-danger hidden">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="emailErrorText">Já existe um aluno cadastrado com este email.</span>
+                </div>
+
+                <div class="form-section">
+                    <h3>Informações de Acesso</h3>
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nome Completo *</label>
+                        <input type="text" name="name" class="form-input" placeholder="Digite o nome completo do aluno" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-envelope"></i> Email *</label>
+                            <input type="email" name="email" id="emailInput" class="form-input" placeholder="exemplo@email.com" required onblur="checkEmail()">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-lock"></i> Senha *</label>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="password" id="password" class="form-input" placeholder="Senha de acesso" required minlength="6">
+                                <button type="button" class="password-toggle" onclick="togglePassword()">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <small class="form-hint">Mínimo 6 caracteres</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Informações Pessoais</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-phone"></i> Telefone</label>
+                            <input type="tel" name="phone" class="form-input" placeholder="(11) 99999-9999" oninput="formatPhone(this)">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-birthday-cake"></i> Data de Nascimento</label>
+                            <input type="date" name="birth_date" class="form-input" max="{{ now().strftime('%Y-%m-%d') }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Assinatura e Acesso</h3>
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar-check"></i> Data de Validade da Assinatura</label>
+                        <input type="date" name="subscription_end_date" class="form-input" min="{{ now().strftime('%Y-%m-%d') }}">
+                        <small class="form-hint">Deixe em branco para assinatura ilimitada</small>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" name="is_active" id="is_active" checked>
+                            <label for="is_active" class="checkbox-label">
+                                <i class="fas fa-check"></i>
+                                Ativar aluno imediatamente
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('studentModal')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-user-plus"></i> Cadastrar Aluno
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* ===== VARIABLES ===== */
+:root {
+    --primary: #007bff;
+    --primary-dark: #0056b3;
+    --success: #28a745;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --dark: #343a40;
+    --light: #f8f9fa;
+    --border: #e9ecef;
+    --text: #212529;
+    --text-muted: #6c757d;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+}
+
+/* ===== CONTEÚDO DA GESTÃO DE ALUNOS ===== */
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    max-width: 100%;
+}
+
+.content-section h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 32px;
+}
+
+/* ===== BOTÕES MELHORADOS ===== */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
+    background: #5a6268;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, var(--success), #1e7e34);
+    color: white;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, var(--warning), #e0a800);
+    color: #212529;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--danger), #c82333);
+    color: white;
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+.btn-icon {
+    padding: 0.75rem;
+    min-width: 44px;
+    justify-content: center;
+}
+
+/* ===== DASHBOARD STYLES ===== */
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+}
+
+.stat-card:nth-child(1)::before { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+.stat-card:nth-child(2)::before { background: linear-gradient(135deg, var(--success), #1e7e34); }
+.stat-card:nth-child(3)::before { background: linear-gradient(135deg, var(--warning), #e0a800); }
+.stat-card:nth-child(4)::before { background: linear-gradient(135deg, var(--danger), #c82333); }
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.stat-icon.primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+.stat-icon.success { background: linear-gradient(135deg, var(--success), #1e7e34); }
+.stat-icon.warning { background: linear-gradient(135deg, var(--warning), #e0a800); }
+.stat-icon.danger { background: linear-gradient(135deg, var(--danger), #c82333); }
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--dark);
+    line-height: 1;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+/* ===== BARRA DE FERRAMENTAS ===== */
+.tools-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+}
+
+.search-box i {
+    position: absolute;
+    left: 1rem;
+    color: var(--text-muted);
+    z-index: 2;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background: white;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.search-clear {
+    position: absolute;
+    right: 0.75rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.search-clear:hover {
+    color: var(--danger);
+    background: var(--light);
+}
+
+.filters {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.filter-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text);
+    font-size: 0.95rem;
+    cursor: pointer;
+    min-width: 160px;
+}
+
+.view-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.view-toggle .btn-icon {
+    border-radius: 0;
+    margin: 0;
+    background: white;
+    color: var(--text-muted);
+}
+
+.view-toggle .btn-icon.active {
+    background: var(--primary);
+    color: white;
+}
+
+.view-toggle .btn-icon:hover:not(.active) {
+    background: var(--light);
+    color: var(--primary);
+}
+
+/* ===== CARDS VIEW ===== */
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.modern-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    position: relative;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+    padding: 1.5rem 1.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.student-avatar {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.card-body {
+    padding: 0 1.5rem 1.5rem;
+}
+
+.card-body h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--dark);
+}
+
+.card-category {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.student-info {
+    space-y: 0.75rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.info-item i {
+    width: 16px;
+    color: var(--primary);
+}
+
+.expired {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.card-actions {
+    padding: 1rem 1.5rem;
+    background: var(--light);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+}
+
+.card-actions form {
+    flex: 1;
+}
+
+/* ===== TABLE VIEW ===== */
+.students-table {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    background: var(--light);
+    padding: 1rem 1.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tr:hover {
+    background: var(--light);
+}
+
+.student-info-compact {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-avatar.small {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.student-name {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.25rem;
+}
+
+.student-email {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.contact-info {
+    space-y: 0.25rem;
+}
+
+.contact-info div {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.contact-info i {
+    width: 14px;
+    color: var(--primary);
+}
+
+.table-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ===== BADGES ===== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.badge-secondary {
+    background: #e9ecef;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+/* ===== PAGINAÇÃO ===== */
+.pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.pagination-info {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-btn {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.pagination-btn:hover {
+    background: var(--light);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.pagination-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.pagination-ellipsis {
+    padding: 0.5rem;
+    color: var(--text-muted);
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    color: var(--border);
+    margin-bottom: 1.5rem;
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    color: var(--dark);
+    margin: 0 0 1rem 0;
+}
+
+.empty-state p {
+    color: var(--text-muted);
+    margin: 0 0 2rem 0;
+    font-size: 1.1rem;
+}
+
+/* ===== MODAL CORRIGIDO ===== */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1;
+}
+
+.modal-container {
+    position: relative;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    animation: modalSlideIn 0.3s ease-out;
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+    overflow: hidden;
+}
+
+/* Formulário do modal como flex container */
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    max-height: calc(90vh - 80px);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--light);
+    flex-shrink: 0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.modal-close {
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    color: var(--danger);
+    background: var(--border);
+}
+
+.modal-body {
+    padding: 2rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.modal-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--border);
+    background: var(--light);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    flex-shrink: 0;
+    margin-top: auto;
+}
+
+.modal-footer .btn {
+    min-width: 120px;
+    justify-content: center;
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* ===== FORM STYLES ===== */
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.form-section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-label i {
+    color: var(--primary);
+    width: 16px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background: white;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper .form-input {
+    padding-right: 3rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.password-toggle:hover {
+    color: var(--primary);
+    background: var(--light);
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.checkbox-group input[type="checkbox"] {
+    display: none;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+    background: var(--light);
+}
+
+.checkbox-label:hover {
+    border-color: var(--primary);
+}
+
+.checkbox-label i {
+    font-size: 0.8rem;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.checkbox-group input[type="checkbox"]:checked + .checkbox-label {
+    background: #e7f3ff;
+    border-color: var(--primary);
+}
+
+.checkbox-group input[type="checkbox"]:checked + .checkbox-label i {
+    opacity: 1;
+    color: var(--primary);
+}
+
+/* ===== ALERTAS ===== */
+.alert {
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+}
+
+.alert-danger {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.alert i {
+    font-size: 1.1rem;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 1024px) {
+    .dashboard-container > :first-child:not(.main-content) {
+        width: 250px;
+    }
+    
+    .main-content {
+        margin-left: 250px;
+        width: calc(100% - 250px);
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .content-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-container > :first-child:not(.main-content) {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .dashboard-container.menu-open > :first-child:not(.main-content) {
+        transform: translateX(0);
+        width: 280px;
+    }
+    
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 20px;
+    }
+    
+    .content-section {
+        padding: 24px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .tools-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-box {
+        min-width: auto;
+    }
+    
+    .filters {
+        justify-content: space-between;
+    }
+    
+    .stats-cards {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .pagination-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .modal-container {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .modal-form {
+        max-height: calc(95vh - 70px);
+    }
+    
+    .modal-body {
+        padding: 1.5rem;
+    }
+    
+    .modal-header,
+    .modal-footer {
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-section h1 {
+        font-size: 24px;
+        margin-bottom: 24px;
+    }
+    
+    .student-info-compact {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .table-actions {
+        flex-direction: column;
+    }
+    
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .card-actions {
+        flex-direction: column;
+    }
+    
+    .main-content {
+        padding: 16px;
+    }
+    
+    .content-section {
+        padding: 20px;
+    }
+}
+
+/* ===== MOBILE MENU TOGGLE ===== */
+.mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    background: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 18px;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: flex;
+    }
+}
+</style>
+
+<script>
+// JavaScript - Todas as funcionalidades preservadas
+let currentViewMode = '{{ view_mode|default("cards") }}';
+let allStudents = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeStudents();
+    setupEventListeners();
+    setupMobileMenu();
+});
+
+function initializeStudents() {
+    // Coletar todos os alunos tanto da view de cards quanto da view de lista
+    const cardStudents = document.querySelectorAll('.modern-card.student-card');
+    const listStudents = document.querySelectorAll('.students-table tbody tr');
+    
+    allStudents = [];
+    
+    // Processar cards
+    cardStudents.forEach(card => {
+        const nameElement = card.querySelector('h3');
+        const emailElement = card.querySelector('.card-category');
+        
+        if (nameElement && emailElement) {
+            allStudents.push({
+                element: card,
+                id: card.dataset.studentId,
+                name: nameElement.textContent.toLowerCase(),
+                email: emailElement.textContent.toLowerCase(),
+                status: card.dataset.status
+            });
+        }
+    });
+    
+    // Processar lista
+    listStudents.forEach(row => {
+        const nameElement = row.querySelector('.student-name');
+        const emailElement = row.querySelector('.student-email');
+        
+        if (nameElement && emailElement) {
+            allStudents.push({
+                element: row,
+                id: row.dataset.studentId,
+                name: nameElement.textContent.toLowerCase(),
+                email: emailElement.textContent.toLowerCase(),
+                status: row.dataset.status
+            });
+        }
+    });
+    
+    console.log('Alunos carregados:', allStudents.length);
+}
+
+function setupEventListeners() {
+    // Re-configurar botões de confirmação (usa SweetAlert2 do base.html)
+    if (typeof setupConfirmButtons === 'function') {
+        setupConfirmButtons();
+    }
+    
+    setupDateInputs();
+    setupSearch();
+}
+
+function setupMobileMenu() {
+    // Criar botão de toggle para menu mobile
+    const mobileMenuButton = document.createElement('button');
+    mobileMenuButton.innerHTML = '☰';
+    mobileMenuButton.className = 'mobile-menu-toggle';
+    mobileMenuButton.onclick = toggleMobileMenu;
+    document.body.appendChild(mobileMenuButton);
+}
+
+function toggleMobileMenu() {
+    document.querySelector('.dashboard-container').classList.toggle('menu-open');
+}
+
+function setupDateInputs() {
+    const birthDateInput = document.querySelector('input[name="birth_date"]');
+    const subscriptionInput = document.querySelector('input[name="subscription_end_date"]');
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (birthDateInput) birthDateInput.max = today;
+    if (subscriptionInput) subscriptionInput.min = today;
+}
+
+function setupSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', filterStudents);
+    }
+    if (statusFilter) {
+        statusFilter.addEventListener('change', filterStudents);
+    }
+}
+
+function filterStudents() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    console.log('Filtrando:', { searchTerm, statusFilter, totalStudents: allStudents.length });
+    
+    let visibleCount = 0;
+    
+    allStudents.forEach(student => {
+        const matchesSearch = searchTerm === '' || 
+                            student.name.includes(searchTerm) || 
+                            student.email.includes(searchTerm);
+        
+        const matchesStatus = statusFilter === 'all' || student.status === statusFilter;
+        
+        const shouldShow = matchesSearch && matchesStatus;
+        
+        if (shouldShow) {
+            visibleCount++;
+        }
+        
+        student.element.style.display = shouldShow ? '' : 'none';
+    });
+    
+    console.log('Alunos visíveis:', visibleCount);
+    
+    // Atualizar contadores visíveis
+    updateVisibleCounters(visibleCount);
+}
+
+function updateVisibleCounters(visibleCount) {
+    // Atualizar o texto de paginação se existir
+    const paginationInfo = document.querySelector('.pagination-info');
+    if (paginationInfo && allStudents.length > 0) {
+        const totalStudents = allStudents.length;
+        paginationInfo.textContent = `Mostrando ${visibleCount} de ${totalStudents} alunos`;
+    }
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    filterStudents();
+}
+
+function setViewMode(mode) {
+    currentViewMode = mode;
+    
+    // Atualizar botões ativos
+    document.querySelectorAll('.view-toggle .btn-icon').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Mostrar/ocultar views
+    document.getElementById('cardsView').classList.toggle('hidden', mode === 'list');
+    document.getElementById('listView').classList.toggle('hidden', mode !== 'list');
+    
+    // Re-inicializar estudantes após mudar de view
+    setTimeout(() => {
+        initializeStudents();
+        filterStudents(); // Re-aplicar filtros
+    }, 100);
+    
+    try {
+        localStorage.setItem('studentViewMode', mode);
+    } catch (e) {
+        console.log('Não foi possível salvar a preferência de visualização');
+    }
+}
+
+async function checkEmail() {
+    const emailInput = document.getElementById('emailInput');
+    const emailError = document.getElementById('emailError');
+    const submitBtn = document.getElementById('submitBtn');
+    const email = emailInput.value.trim();
+    
+    if (!email) return;
+    
+    try {
+        const response = await fetch('/professor/check-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const data = await response.json();
+        
+        if (data.exists) {
+            emailError.classList.remove('hidden');
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.6';
+        } else {
+            emailError.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+        }
+    } catch (error) {
+        console.error('Erro ao verificar email:', error);
+    }
+}
+
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    resetModal();
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+}
+
+function resetModal() {
+    const form = document.querySelector('#studentModal form');
+    if (form) {
+        form.reset();
+        document.getElementById('emailError').classList.add('hidden');
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').style.opacity = '1';
+        
+        // Rolar para o topo do modal
+        const modalBody = document.querySelector('#studentModal .modal-body');
+        if (modalBody) {
+            modalBody.scrollTop = 0;
+        }
+    }
+}
+
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleButton = document.querySelector('.password-toggle i');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleButton.className = 'fas fa-eye-slash';
+    } else {
+        passwordInput.type = 'password';
+        toggleButton.className = 'fas fa-eye';
+    }
+}
+
+function formatPhone(input) {
+    let value = input.value.replace(/\D/g, '');
+    
+    if (value.length > 10) {
+        value = value.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    } else if (value.length > 6) {
+        value = value.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+    } else if (value.length > 2) {
+        value = value.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+    } else if (value.length > 0) {
+        value = value.replace(/^(\d{0,2})/, '($1');
+    }
+    
+    input.value = value;
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.classList.contains('active')) {
+                closeModal(modal.id);
+            }
+        });
+    }
+}
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.classList.contains('active')) {
+                closeModal(modal.id);
+            }
+        });
+    }
+});
+
+// Restaurar preferência de visualização
+try {
+    const savedViewMode = localStorage.getItem('studentViewMode');
+    if (savedViewMode) {
+        currentViewMode = savedViewMode;
+        setTimeout(() => {
+            const toggleBtn = document.querySelector(`.view-toggle .btn-icon[onclick="setViewMode('${savedViewMode}')"]`);
+            if (toggleBtn) {
+                toggleBtn.click();
+            }
+        }, 100);
+    }
+} catch (e) {
+    console.log('Não foi possível restaurar a preferência de visualização');
+}
+
+// Re-inicializar quando houver mudanças no DOM (útil para quando alunos são adicionados/removidos via AJAX)
+function refreshStudents() {
+    initializeStudents();
+    filterStudents();
+}
+
+// Expor função globalmente para poder chamar de outros scripts
+window.refreshStudents = refreshStudents;
+window.filterStudents = filterStudents;
+</script>
+{% endblock %}

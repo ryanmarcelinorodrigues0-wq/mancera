@@ -1,0 +1,981 @@
+{% extends "base.html" %}
+
+{% block title %}Submissoes - {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {% include 'professor/_sidebar.html' %}
+    
+    <main class="main-content">
+        <div class="content-wrapper">
+            <header class="page-header">
+                <a href="{{ url_for('professor_tasks') }}" class="back-link">
+                    <i class="fas fa-arrow-left"></i> Voltar para Tarefas
+                </a>
+            </header>
+            
+            <!-- Info da Tarefa -->
+            <section class="task-info-card">
+                <div class="task-header">
+                    <div class="task-title-section">
+                        <div class="task-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div>
+                            <h1>{{ task.title }}</h1>
+                            <p class="task-description">{{ task.description[:200] }}{% if task.description|length > 200 %}...{% endif %}</p>
+                        </div>
+                    </div>
+                    <span class="task-status {% if task.is_past_due() %}expired{% else %}active{% endif %}">
+                        {% if task.is_past_due() %}
+                        <i class="fas fa-clock"></i> Prazo encerrado
+                        {% else %}
+                        <i class="fas fa-hourglass-half"></i> Em andamento
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Prazo: {{ task.due_date.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                    {% if task.max_score %}
+                    <div class="meta-item">
+                        <i class="fas fa-star"></i>
+                        <span>Valor: {{ task.max_score }} pontos</span>
+                    </div>
+                    {% endif %}
+                    <div class="meta-item">
+                        <i class="fas fa-users"></i>
+                        <span>{{ submissions|length }} envio(s)</span>
+                    </div>
+                </div>
+            </section>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <i class="fas {{ 'fa-check-circle' if category == 'success' else 'fa-exclamation-circle' }}"></i>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <!-- Estatisticas -->
+            <section class="stats-grid">
+                <div class="stat-card total">
+                    <div class="stat-icon">
+                        <i class="fas fa-paper-plane"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ submissions|length }}</span>
+                        <span class="stat-label">Total de Envios</span>
+                    </div>
+                </div>
+                <div class="stat-card pending">
+                    <div class="stat-icon">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ submissions|selectattr('score', 'none')|list|length }}</span>
+                        <span class="stat-label">Pendentes</span>
+                    </div>
+                </div>
+                <div class="stat-card graded">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value">{{ submissions|rejectattr('score', 'none')|list|length }}</span>
+                        <span class="stat-label">Corrigidos</span>
+                    </div>
+                </div>
+                <div class="stat-card average">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-info">
+                        {% set graded = submissions|rejectattr('score', 'none')|list %}
+                        {% if graded %}
+                        <span class="stat-value">{{ "%.1f"|format(graded|map(attribute='score')|list|sum / graded|length) }}</span>
+                        {% else %}
+                        <span class="stat-value">N/A</span>
+                        {% endif %}
+                        <span class="stat-label">Media da Turma</span>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Lista de Submissoes -->
+            <section class="submissions-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-list-alt"></i> Envios dos Alunos</h2>
+                </div>
+                
+                {% if submissions %}
+                <div class="submissions-list">
+                    {% for submission in submissions %}
+                    <div class="submission-card {% if submission.score is none %}pending{% else %}graded{% endif %}">
+                        <div class="student-section">
+                            <div class="student-avatar">
+                                {{ submission.student.name[:2]|upper }}
+                            </div>
+                            <div class="student-details">
+                                <h3>{{ submission.student.name }}</h3>
+                                <p>{{ submission.student.email }}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="submission-details">
+                            <div class="detail-item">
+                                <span class="detail-label">Enviado em:</span>
+                                <span class="detail-value">{{ submission.submitted_at.strftime('%d/%m/%Y as %H:%M') }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value {% if submission.is_late %}late{% endif %}">
+                                    {% if submission.is_late %}
+                                    <i class="fas fa-exclamation-triangle"></i> Atrasado
+                                    {% else %}
+                                    <i class="fas fa-check"></i> No prazo
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="grade-section">
+                            {% if submission.score is not none %}
+                            <div class="grade-display {% if submission.score >= 7 %}good{% elif submission.score >= 5 %}average{% else %}low{% endif %}">
+                                {{ "%.1f"|format(submission.score) }}
+                            </div>
+                            {% else %}
+                            <span class="pending-badge">Pendente</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="actions-section">
+                            <button class="btn-action primary" onclick="openGradeModal({{ submission.id }}, '{{ submission.student.name }}', {{ submission.score if submission.score is not none else 'null' }}, '{{ submission.feedback|e if submission.feedback else '' }}')">
+                                <i class="fas fa-{% if submission.score is none %}edit{% else %}pen{% endif %}"></i>
+                                {{ 'Corrigir' if submission.score is none else 'Editar' }}
+                            </button>
+                            {% if submission.file_path %}
+                            <a href="{{ url_for('professor_download_submission', submission_id=submission.id) }}" class="btn-action secondary" title="Baixar arquivo">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            {% endif %}
+                            <button class="btn-action secondary" onclick="openViewModal({{ submission.id }}, '{{ submission.student.name }}', '{{ submission.content|e if submission.content else '' }}', {{ submission.file_path is not none|lower }})" title="Visualizar">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-inbox"></i>
+                    </div>
+                    <h3>Nenhum envio recebido</h3>
+                    <p>Ainda nao ha submissoes para esta tarefa.</p>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+    </main>
+</div>
+
+<!-- Modal de Correcao -->
+<div class="modal" id="gradeModal">
+    <div class="modal-overlay" onclick="closeGradeModal()"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-edit"></i> Corrigir Tarefa</h2>
+            <button class="modal-close" onclick="closeGradeModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('professor_grade_submission') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="submission_id" id="gradeSubmissionId">
+            
+            <div class="modal-body">
+                <div class="student-info-box">
+                    <i class="fas fa-user-graduate"></i>
+                    <span>Aluno: <strong id="gradeStudentName"></strong></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="grade"><i class="fas fa-star"></i> Nota</label>
+                    <input type="number" name="grade" id="gradeInput" step="0.1" min="0" max="10" required>
+                    <small class="form-hint">Nota de 0 a 10</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="feedback"><i class="fas fa-comment"></i> Feedback (opcional)</label>
+                    <textarea name="feedback" id="feedbackInput" rows="4" placeholder="Deixe um feedback para o aluno..."></textarea>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeGradeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Correcao</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de Visualizacao -->
+<div class="modal" id="viewModal">
+    <div class="modal-overlay" onclick="closeViewModal()"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-eye"></i> Visualizar Envio</h2>
+            <button class="modal-close" onclick="closeViewModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="student-info-box">
+                <i class="fas fa-user-graduate"></i>
+                <span>Aluno: <strong id="viewStudentName"></strong></span>
+            </div>
+            
+            <div id="viewContent">
+                <h4>Resposta do Aluno:</h4>
+                <div class="content-box" id="viewContentText"></div>
+            </div>
+            
+            <div id="viewFile" style="display: none;">
+                <h4>Arquivo Enviado:</h4>
+                <p id="viewFileInfo"><i class="fas fa-file"></i> O aluno enviou um arquivo.</p>
+            </div>
+            
+            <div id="viewEmpty" style="display: none;">
+                <p class="no-content"><i class="fas fa-info-circle"></i> Nenhum conteudo foi enviado.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeViewModal()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f8f9fa;
+}
+
+.main-content {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.content-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 24px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 0.95rem;
+    padding: 10px 16px;
+    border-radius: 10px;
+    transition: all 0.3s;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.back-link:hover {
+    color: #007BFF;
+    background: #e7f3ff;
+    transform: translateX(-4px);
+}
+
+/* Task Info Card */
+.task-info-card {
+    background: linear-gradient(135deg, #fff 0%, #f8f9ff 100%);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    margin-bottom: 24px;
+    border: 1px solid rgba(0, 123, 255, 0.08);
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.task-title-section {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.task-icon {
+    width: 55px;
+    height: 55px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.task-header h1 {
+    font-size: 1.5rem;
+    color: #1a1a2e;
+    margin: 0 0 8px 0;
+}
+
+.task-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.task-status {
+    padding: 10px 18px;
+    border-radius: 25px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.task-status.active {
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.1) 0%, rgba(0, 86, 179, 0.1) 100%);
+    color: #007BFF;
+}
+
+.task-status.expired {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(180, 40, 50, 0.1) 100%);
+    color: #dc3545;
+}
+
+.task-meta {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.meta-item i {
+    color: #007BFF;
+}
+
+/* Alert */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.alert-success { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); color: #155724; }
+.alert-error, .alert-danger { background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); color: #721c24; }
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card .stat-icon {
+    width: 55px;
+    height: 55px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: #fff;
+}
+
+.stat-card.total .stat-icon { background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%); }
+.stat-card.pending .stat-icon { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); }
+.stat-card.graded .stat-icon { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+.stat-card.average .stat-icon { background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%); }
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+/* Submissions Section */
+.submissions-section {
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    margin-bottom: 24px;
+}
+
+.section-header h2 {
+    font-size: 1.2rem;
+    color: #1a1a2e;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header h2 i {
+    color: #007BFF;
+}
+
+/* Submissions List */
+.submissions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.submission-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto auto;
+    align-items: center;
+    gap: 24px;
+    padding: 22px 24px;
+    background: #f8f9fa;
+    border-radius: 14px;
+    transition: all 0.3s;
+    border-left: 4px solid transparent;
+}
+
+.submission-card:hover {
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.submission-card.pending {
+    border-left-color: #ffc107;
+}
+
+.submission-card.graded {
+    border-left-color: #28a745;
+}
+
+.student-section {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.student-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.student-details h3 {
+    font-size: 1rem;
+    color: #1a1a2e;
+    margin: 0 0 4px 0;
+}
+
+.student-details p {
+    font-size: 0.8rem;
+    color: #999;
+    margin: 0;
+}
+
+.submission-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detail-label {
+    font-size: 0.7rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-value {
+    font-size: 0.9rem;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.detail-value.late {
+    color: #dc3545;
+}
+
+.grade-section {
+    text-align: center;
+    min-width: 80px;
+}
+
+.grade-display {
+    font-size: 1.5rem;
+    font-weight: 700;
+    padding: 12px 18px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.grade-display.good { background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(30, 126, 52, 0.15) 100%); color: #28a745; }
+.grade-display.average { background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(224, 168, 0, 0.15) 100%); color: #d39e00; }
+.grade-display.low { background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(180, 40, 50, 0.15) 100%); color: #dc3545; }
+
+.pending-badge {
+    display: inline-block;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(224, 168, 0, 0.15) 100%);
+    color: #d39e00;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.actions-section {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-action {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+    text-decoration: none;
+}
+
+.btn-action.primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-action.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+}
+
+.btn-action.secondary {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-action.secondary:hover {
+    background: #dee2e6;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-icon {
+    width: 90px;
+    height: 90px;
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
+}
+
+.empty-icon i {
+    font-size: 2.2rem;
+    color: #fff;
+}
+
+.empty-state h3 {
+    color: #1a1a2e;
+    margin: 0 0 10px 0;
+    font-size: 1.2rem;
+}
+
+.empty-state p {
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal-container {
+    background: #fff;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 550px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+    animation: modalSlideIn 0.3s ease;
+    box-shadow: 0 25px 70px rgba(0, 0, 0, 0.25);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 22px 28px;
+    border-bottom: 1px solid #e9ecef;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 20px 20px 0 0;
+}
+
+.modal-header h2 {
+    font-size: 1.2rem;
+    color: #1a1a2e;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-header h2 i {
+    color: #007BFF;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: #e9ecef;
+    color: #dc3545;
+}
+
+.modal-body {
+    padding: 28px;
+}
+
+.student-info-box {
+    background: linear-gradient(135deg, #e7f3ff 0%, #d4e6ff 100%);
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #007BFF;
+}
+
+.student-info-box i {
+    font-size: 1.2rem;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin-bottom: 10px;
+}
+
+.form-group label i {
+    color: #007BFF;
+}
+
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: #007BFF;
+    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.1);
+}
+
+.form-hint {
+    display: block;
+    margin-top: 6px;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.content-box {
+    padding: 18px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    border: 1px solid #e9ecef;
+}
+
+.no-content {
+    text-align: center;
+    color: #6c757d;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 20px 28px;
+    border-top: 1px solid #e9ecef;
+    background: #f8f9fa;
+    border-radius: 0 0 20px 20px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-secondary {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-secondary:hover {
+    background: #dee2e6;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #007BFF 0%, #0056B3 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .submission-card {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .actions-section {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 20px;
+    }
+    
+    .task-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .task-title-section {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+
+<script>
+function openGradeModal(submissionId, studentName, grade, feedback) {
+    document.getElementById('gradeSubmissionId').value = submissionId;
+    document.getElementById('gradeStudentName').textContent = studentName;
+    document.getElementById('gradeInput').value = grade !== null ? grade : '';
+    document.getElementById('feedbackInput').value = feedback || '';
+    document.getElementById('gradeModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeGradeModal() {
+    document.getElementById('gradeModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function openViewModal(submissionId, studentName, content, hasFile) {
+    document.getElementById('viewStudentName').textContent = studentName;
+    
+    const contentDiv = document.getElementById('viewContent');
+    const fileDiv = document.getElementById('viewFile');
+    const emptyDiv = document.getElementById('viewEmpty');
+    
+    if (content) {
+        contentDiv.style.display = 'block';
+        document.getElementById('viewContentText').textContent = content;
+    } else {
+        contentDiv.style.display = 'none';
+    }
+    
+    fileDiv.style.display = hasFile ? 'block' : 'none';
+    emptyDiv.style.display = (!content && !hasFile) ? 'block' : 'none';
+    
+    document.getElementById('viewModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeViewModal() {
+    document.getElementById('viewModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Fechar modal ao clicar no overlay
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function() {
+        this.closest('.modal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    });
+});
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        document.querySelectorAll('.modal').forEach(modal => {
+            if (modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
